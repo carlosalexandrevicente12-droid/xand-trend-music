@@ -1,0 +1,39 @@
+name: Publicar XAND TREND no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Obter os arquivos
+        uses: actions/checkout@v4
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Preparar site
+        run: |
+          mkdir -p public
+          cp index.html public/index.html
+          touch public/.nojekyll
+      - name: Enviar site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v4
