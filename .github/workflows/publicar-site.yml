@@ -29,6 +29,7 @@ jobs:
         run: |
           mkdir -p public
           cp index.html public/index.html
+          cp radar-lab.html radar-lab.css radar-lab.js public/
           touch public/.nojekyll
       - name: Enviar site
         uses: actions/upload-pages-artifact@v4
