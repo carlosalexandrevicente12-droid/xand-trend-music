@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080e17">
+<title>XAND Music Radar — laboratório de música e desempenho</title>
+<meta name="description" content="Descubra, compare e catalogue músicas do TikTok. Analise o áudio da aba sem baixar vídeos.">
+<link rel="stylesheet" href="./radar-lab.css">
+<script src="./radar-lab.js" defer></script>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+  <a class="logo" href="./index.html" aria-label="XAND TREND, página inicial"><span class="logo-spark">✳</span><span>XAND<span class="bright">/</span>RADAR</span></a>
+  <div class="sidebar-sub">MUSIC INTELLIGENCE</div>
+  <div class="side-label">PLATAFORMA</div>
+  <nav class="side-nav" aria-label="Módulos">
+    <a href="#descoberta" class="nav-active"><span>◈</span> Descoberta</a>
+    <a href="#laboratorio"><span>◉</span> Análise ao vivo</a>
+    <a href="#biblioteca"><span>▤</span> Biblioteca</a>
+    <a href="#desempenho"><span>▥</span> Desempenho</a>
+  </nav>
+  <div class="side-label">ATALHOS OFICIAIS</div>
+  <nav class="side-nav secondary" aria-label="Links externos">
+    <a target="_blank" rel="noopener noreferrer" href="https://www.tiktok.com/@xanndmusic">Perfil @xanndmusic ↗</a>
+    <a target="_blank" rel="noopener noreferrer" href="https://ads.tiktok.com/business/creativecenter/">TikTok Creative Center ↗</a>
+    <a target="_blank" rel="noopener noreferrer" href="https://www.tiktok.com/tiktokstudio/content">TikTok Studio ↗</a>
+  </nav>
+  <div class="sidebar-bottom"><span class="online-pip"></span> Versão local, sem API paga <small>Os registros são guardados somente neste navegador.</small></div>
+</aside>
+<main class="main">
+  <header class="topbar">
+    <div><span class="path-muted">XAND MUSIC</span><span class="path-slash"> / </span><strong>RADAR</strong></div>
+    <div class="top-actions"><span class="header-chip"><span class="online-pip"></span> FREE / LOCAL</span><a href="./index.html" class="header-link">Voltar ao XAND TREND ↗</a></div>
+  </header>
+  <div class="hero">
+    <div class="hero-copy">
+      <span class="eyebrow">CENTRAL DE PESQUISA MUSICAL <span class="dash">—</span> @XANNDMUSIC</span>
+      <h1>Encontre novos sons.<br><em>Entenda os padrões.</em></h1>
+      <p>Pesquise no TikTok, ouça no próprio navegador, capture os indicadores do áudio da aba sem baixar vídeos e organize o que funciona para seus posts.</p>
+      <div class="hero-buttons"><a class="btn primary" href="#laboratorio">◉ Analisar som da aba</a><a class="btn outline" href="#descoberta">Explorar músicas →</a></div>
+    </div>
+    <div class="hero-decoration" aria-hidden="true">
+       <div class="glow-orbit"></div><div class="circle-core"><span>✳</span></div>
+       <div class="hero-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+       <div class="visual-label">SOUND / DISCOVERY</div>
+    </div>
+  </div>
+  <div class="metrics"><div class="metric"><div class="metric-label">MÚSICAS REGISTRADAS</div><b id="stat-total">0</b><small>na biblioteca local</small></div><div class="metric"><div class="metric-label">AINDA NÃO PUBLICADAS</div><b id="stat-new">0</b><small>marcadas como inéditas</small></div><div class="metric"><div class="metric-label">COM ANÁLISE DE ÁUDIO</div><b id="stat-analyzed">0</b><small>medidas neste navegador</small></div><div class="metric"><div class="metric-label">ABA EM ANÁLISE</div><b id="stat-live" class="metric-live">Parada</b><small>sem gravação de áudio</small></div></div>
+  <section id="descoberta" class="section">
+    <div class="section-title"><div><span class="section-kicker">01 / PESQUISA</span><h2>Radar de descoberta <span class="section-dim">↗</span></h2><p>Pesquise com termos específicos no TikTok. Nenhum ranking ou música é inventado.</p></div><span class="section-tag">FONTE: TIKTOK</span></div>
+    <div class="columns discovery-grid">
+      <div class="panel">
+        <h3>Definir a busca <span class="subtle">/ NOVOS SONS</span></h3>
+        <div class="field"><label for="search-style">ESTILO MUSICAL</label><select id="search-style">
+          <option value="bass house">Bass House</option><option value="tech house">Tech House</option><option value="deep house">Deep House</option><option value="techno">Techno</option><option value="edm">EDM</option><option value="house music">House</option><option value="electronic music">Eletrônica geral</option>
+        </select></div>
+        <div class="fields-2"><div class="field"><label for="search-vocal">VOCAL</label><select id="search-vocal"><option value="female vocal">Feminino</option><option value="male vocal">Masculino</option><option value="vocal">Qualquer vocal</option></select></div><div class="field"><label for="search-region">REFERÊNCIA</label><select id="search-region"><option value="brasil">Brasil</option><option value="">Internacional</option></select></div></div>
+        <div class="field"><label for="search-extra">TERMO ADICIONAL</label><input id="search-extra" placeholder="Ex.: dark, energetic, remix, viral..."></div>
+        <button id="search-button" class="btn primary wide" type="button">Pesquisar no TikTok ↗</button>
+        <p class="fineprint">Abre uma busca real no TikTok. Os resultados não são extraídos automaticamente e não há filtro oficial de vocal nesta busca.</p>
+      </div>
+      <div class="panel playlist">
+        <div class="playlist-head"><span class="playlist-icon">♫</span><div><h3>Fontes para encontrar sons</h3><p>Explore tendências e depois cadastre os links que interessarem.</p></div></div>
+        <a href="https://ads.tiktok.com/business/creativecenter/" target="_blank" rel="noopener noreferrer" class="source-row"><span class="source-symbol">01</span><span><b>Creative Center</b><small>Ranking e descoberta de sons oficiais</small></span><span>↗</span></a>
+        <a href="https://www.tiktok.com/search?q=tech%20house%20vocal" target="_blank" rel="noopener noreferrer" class="source-row"><span class="source-symbol">02</span><span><b>Tech House com vocal</b><small>Pesquisa direta de vídeos e áudios</small></span><span>↗</span></a>
+        <a href="https://www.tiktok.com/search?q=bass%20house%20female%20vocal" target="_blank" rel="noopener noreferrer" class="source-row"><span class="source-symbol">03</span><span><b>Bass House feminino</b><small>Voz + grave para testar no radar</small></span><span>↗</span></a>
+        <a href="https://www.tiktok.com/tiktokstudio/content" target="_blank" rel="noopener noreferrer" class="source-row"><span class="source-symbol">04</span><span><b>Seus próprios vídeos</b><small>Confira o que já publicou</small></span><span>↗</span></a>
+      </div>
+    </div>
+  </section>
+  <section id="laboratorio" class="section">
+    <div class="section-title"><div><span class="section-kicker">02 / FERRAMENTA DE ÁUDIO</span><h2>Laboratório de som <span class="section-dim">◉</span></h2><p>Compartilhe uma aba do TikTok com áudio. O som será analisado em memória, sem salvar o vídeo.</p></div><span class="section-tag green">SEM DOWNLOAD</span></div>
+    <div class="columns lab-grid">
+      <div class="panel lab-main">
+        <div class="lab-top"><div class="live-id"><span id="live-dot" class="live-dot"></span> <span id="live-label">CAPTURA DESLIGADA</span></div><span class="panel-no">LIVE ANALYZER · WEB AUDIO</span></div>
+        <div class="spectrum" id="spectrum" aria-label="Visualizador das frequências de áudio">
+          <div class="spectrum-bars" id="spectrum-bars" aria-hidden="true"></div>
+          <div class="frequency-axis"><span>GRAVES</span><span>MÉDIOS</span><span>AGUDOS</span></div>
+        </div>
+        <div class="audio-stats">
+          <div><small>BPM ESTIMADO</small><strong id="live-bpm">—</strong></div>
+          <div><small>ENERGIA NOS GRAVES*</small><strong id="live-bass">—</strong></div>
+          <div><small>NÍVEL DO SINAL</small><strong id="live-level">—</strong></div>
+          <div><small>TEMPO ANALISADO</small><strong id="live-time">0s</strong></div>
+        </div>
+        <div class="lab-buttons"><button type="button" id="start-capture" class="btn primary">◉ Compartilhar aba com áudio</button><button type="button" id="stop-capture" class="btn outline" disabled>■ Parar análise</button><button type="button" id="save-capture" class="btn outline" disabled>Salvar medições na música selecionada</button></div>
+        <div class="status" id="capture-status" role="status">Para analisar um vídeo sem baixá-lo, abra o TikTok em outra aba, clique em compartilhar e marque a opção de compartilhar áudio da aba.</div>
+        <p class="fineprint">*Indicador relativo de energia entre 40–180 Hz e a banda analisada até 8 kHz; não é medição acústica calibrada. BPM é estimado por picos rítmicos e pode variar, especialmente em músicas com síncope. Vocal e gênero não são detectados automaticamente nesta versão.</p>
+      </div>
+      <div class="panel track-inspector">
+        <h3>Selecionar uma música <span class="subtle">/ LINK</span></h3>
+        <div class="field"><label for="track-title">NOME DA MÚSICA</label><input id="track-title" placeholder="Título ou nome do som original"></div>
+        <div class="field"><label for="track-artist">ARTISTA / CRIADOR</label><input id="track-artist" placeholder="Nome do artista ou @criador"></div>
+        <div class="field"><label for="track-url">LINK DO VÍDEO OU ÁUDIO NO TIKTOK</label><input id="track-url" inputmode="url" placeholder="https://www.tiktok.com/..."></div>
+        <div class="fields-2"><div class="field"><label for="track-genre">ESTILO (MANUAL)</label><select id="track-genre"><option value="">Não classificado</option><option>Bass House</option><option>Tech House</option><option>Deep House</option><option>Techno</option><option>EDM</option><option>House</option><option>Outro</option></select></div><div class="field"><label for="track-vocal">VOCAL (MANUAL)</label><select id="track-vocal"><option value="unknown">Não avaliado</option><option value="yes">Com vocal</option><option value="no">Sem vocal</option></select></div></div>
+        <div class="fields-2"><div class="field"><label for="track-status">SITUAÇÃO</label><select id="track-status"><option value="new">Inédita</option><option value="candidate">Em avaliação</option><option value="used">Já publicada</option><option value="discarded">Descartada</option></select></div><div class="field"><label for="track-views">VISUALIZAÇÕES (OPCIONAL)</label><input id="track-views" type="number" min="0" step="1" placeholder="Ex.: 763"></div></div>
+        <div class="field"><label for="track-notes">OBSERVAÇÕES</label><textarea id="track-notes" rows="2" placeholder="Ex.: grave forte, vocal repetitivo, imagem para testar..."></textarea></div>
+        <div class="inspector-actions"><button type="button" class="btn primary" id="add-track">Salvar música</button><button type="button" class="btn outline" id="new-track">Limpar</button><button type="button" class="btn outline" id="open-track" disabled>Abrir no TikTok ↗</button></div>
+        <p class="fineprint">Reproduza o som no TikTok, compartilhe a aba e salve as medições. A classificação de vocal e estilo é manual até existir um modelo de identificação comprovado.</p>
+        <div id="track-status-msg" class="status" role="status"></div>
+      </div>
+    </div>
+  </section>
+  <section id="biblioteca" class="section">
+    <div class="section-title"><div><span class="section-kicker">03 / ORGANIZAÇÃO</span><h2>Minha biblioteca <span class="section-dim">▤</span></h2><p>Guarde links e compare diferentes músicas sem repetir as que já publicou.</p></div><span class="section-tag">ARMAZENAMENTO LOCAL</span></div>
+    <div class="panel">
+      <div class="library-toolbar"><div class="toolbar-search"><input id="library-search" placeholder="Buscar música ou artista..." aria-label="Buscar na biblioteca"></div><select id="library-filter" aria-label="Filtrar músicas"><option value="all">Todas as músicas</option><option value="new">Inéditas</option><option value="candidate">Em avaliação</option><option value="used">Já publicadas</option><option value="discarded">Descartadas</option><option value="analyzed">Com análise de áudio</option></select><button class="btn outline small" id="export-json" type="button">Exportar JSON ↓</button><button class="btn outline small" id="export-csv" type="button">Exportar CSV ↓</button><label class="btn outline small upload-label">Importar CSV/JSON <input id="import-file" type="file" accept=".csv,.json,text/csv,application/json" hidden></label></div>
+      <div class="library-count" id="library-count">Nenhuma música cadastrada.</div>
+      <div id="library-list" class="library-list"><div class="empty-state">Sua biblioteca aparecerá aqui.</div></div>
+      <div id="library-msg" class="status" role="status"></div>
+    </div>
+  </section>
+  <section id="desempenho" class="section">
+    <div class="section-title"><div><span class="section-kicker">04 / PADRÕES</span><h2>Comparar resultados <span class="section-dim">▥</span></h2><p>Resumo dos registros que têm visualizações informadas. Não é acesso automático ao TikTok Studio.</p></div><span class="section-tag">BASE: DADOS INSERIDOS</span></div>
+    <div class="columns performance-grid"><div class="panel"><h3>Vídeos abaixo de 1.000</h3><div class="big-stat" id="under-1k">—</div><p>Registros com 0 a 999 visualizações.</p></div><div class="panel"><h3>Vídeos com 1.000 ou mais</h3><div class="big-stat" id="over-1k">—</div><p>Registros com 1.000+ visualizações.</p></div><div class="panel"><h3>Estilos cadastrados</h3><div class="genre-breakdown" id="genre-breakdown">Sem registros suficientes.</div></div></div>
+    <div class="notice"><b>Limitação importante:</b> o mesmo áudio pode ser usado em vários vídeos com imagens diferentes. Esta primeira versão organiza músicas e métricas manualmente, mas não determina causalidade, não acessa retenção nem coleta o histórico da conta em segundo plano.</div>
+  </section>
+  <footer> XAND MUSIC RADAR · 2026 · Dados locais. Nenhum áudio capturado é enviado ou gravado. <a href="./index.html">XAND TREND ↗</a></footer>
+</main>
+</div>
+</body>
+</html>
