@@ -47,7 +47,7 @@
   }
   function getInt(value) {
     if (value === '' || value === null || value === undefined) return null;
-    const number = Number(String(value).replace(/\s/g,'').replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',','.'));
+    const number = Number(String(value).trim().replace(/[\s.,]/g,''));
     return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
   }
   function setMessage(id,text,error) {
