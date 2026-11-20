@@ -162,6 +162,15 @@ public final class ArtworkRenderer {
       Math.min(w,maxX+1+pad),Math.min(h,maxY+1+pad));
   }
 
+  /** Generates an in-memory preview without touching the original image file. */
+  public static Bitmap loadLogoPreview(Context context,Uri uri) throws IOException {
+    Bitmap original=decodeImage(context,uri);
+    try {
+      Rect area=visibleLogoBounds(original);
+      return Bitmap.createBitmap(original,area.left,area.top,area.width(),area.height());
+    } finally {original.recycle();}
+  }
+
   private static void drawLogo(Canvas canvas, Bitmap logo, String position) throws IOException {
     boolean top=position==null || position.startsWith("Superior");
     boolean centered=position!=null && position.endsWith("centro");
