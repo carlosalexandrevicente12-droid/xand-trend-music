@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
   String logo=prefs.getString("logo_uri","");
   if(!logo.isEmpty()){
    ImageView logoView=new ImageView(this);logoView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-   try{logoView.setImageURI(Uri.parse(logo));}catch(Exception ignored){}
+   try{logoView.setImageBitmap(ArtworkRenderer.loadLogoPreview(this,Uri.parse(logo)));}catch(Exception ex){Toast.makeText(this,"Não foi possível ler a logo original.",Toast.LENGTH_SHORT).show();}
    String pos=prefs.getString("logo_position","Superior direita");
    int gravity=(pos.startsWith("Superior")?android.view.Gravity.TOP:android.view.Gravity.BOTTOM)|
      (pos.endsWith("centro")?android.view.Gravity.CENTER_HORIZONTAL:android.view.Gravity.RIGHT);
