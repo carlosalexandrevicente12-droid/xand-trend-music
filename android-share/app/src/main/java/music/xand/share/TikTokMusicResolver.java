@@ -82,7 +82,13 @@ public final class TikTokMusicResolver {
   private static boolean originalSound(String title,boolean original) {
     String t=title.toLowerCase(Locale.ROOT).trim();
     return original || t.startsWith("original sound") || t.startsWith("som original") ||
-      t.startsWith("original audio") || t.startsWith("áudio original");
+      t.startsWith("original audio") || t.startsWith("áudio original") ||
+      t.startsWith("оригинальный звук") || t.startsWith("sonido original") ||
+      t.startsWith("son original") || t.startsWith("suono originale") ||
+      t.startsWith("originalton") || t.startsWith("suara asli") ||
+      t.startsWith("âm thanh gốc") || t.startsWith("オリジナル楽曲") ||
+      t.startsWith("原声") || t.startsWith("原聲") || t.startsWith("오리지널 사운드") ||
+      t.startsWith("الصوت الأصلي");
   }
 
   private static String safeText(String s){
