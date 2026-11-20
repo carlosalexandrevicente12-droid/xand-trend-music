@@ -17,12 +17,14 @@ public final class ScriptExecutor {
   public static String validate(String body){
     if(body==null||body.length()>4000)return "Limite de 4.000 caracteres.";
     String[] lines=body.replace("\r","").split("\n",-1);
+    int interactiveActions=0;
     if(lines.length>40)return "Limite de 40 linhas.";
     for(int i=0;i<lines.length;i++){
       String line=lines[i].trim();
       if(line.isEmpty()||line.startsWith("#"))continue;
       if(line.startsWith("AVISAR ")&&line.length()<=170&&line.substring(7).trim().length()>0)continue;
-      if(line.equals("COPIAR_LINK")||line.equals("ABRIR_TIKTOK")||line.equals("MANTER_NA_FILA"))continue;
+      if(line.equals("COPIAR_LINK")||line.equals("ABRIR_TIKTOK")||line.equals("MANTER_NA_FILA")||line.equals("COPIAR_LEGENDA"))continue;
+      if(line.equals("GERAR_LEGENDA")||line.equals("BUSCAR_PINTEREST")||line.equals("PREPARAR_ARTE")){if(++interactiveActions>1)return "Use apenas uma ação visual por script.";continue;}
       return "Comando inválido na linha "+(i+1)+": "+(line.length()>30?line.substring(0,30):line);
     }
     return "OK";
@@ -45,7 +47,15 @@ public final class ScriptExecutor {
           }else if(line.equals("ABRIR_TIKTOK")){
             try{activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception error){Toast.makeText(activity,"Não foi possível abrir o TikTok.",Toast.LENGTH_SHORT).show();}
           }
-          // MANTER_NA_FILA does not duplicate: MainActivity already registered the link.
+
+          else if(activity instanceof MainActivity){
+            MainActivity main=(MainActivity)activity;
+            if(line.equals("COPIAR_LEGENDA"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{if(!main.needsMetadata(url))main.copyText("Legenda XAND",main.caption(url));});
+            else if(line.equals("GERAR_LEGENDA"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.prepareCaption(url));
+            else if(line.equals("BUSCAR_PINTEREST"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.pinterest(url));
+            else if(line.equals("PREPARAR_ARTE"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.prepareArtwork(url));
+          }
+                    // MANTER_NA_FILA does not duplicate: MainActivity already registered the link.
         }
         prefs.edit().putString("script_last_run",scriptId+"|"+System.currentTimeMillis()).apply();
         return true;
