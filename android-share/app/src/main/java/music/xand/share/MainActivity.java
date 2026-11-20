@@ -20,7 +20,7 @@ public class MainActivity extends Activity {
  void save(JSONArray a){prefs.edit().putString("queue",a.toString()).apply();}
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString()).apply();show();}
- void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!url.contains("tiktok.com"))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);runShareFlows(url);}
+ void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);runShareFlows(url);identifySong(url,false);}
  public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");}if(Intent.ACTION_SEND.equals(getIntent().getAction()))add(getIntent().getStringExtra(Intent.EXTRA_TEXT));show();}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(Intent.ACTION_SEND.equals(intent.getAction()))add(intent.getStringExtra(Intent.EXTRA_TEXT));show();}
@@ -251,33 +251,40 @@ public class MainActivity extends Activity {
   }catch(Exception ex){Toast.makeText(this,"Falha ao executar automação.",Toast.LENGTH_SHORT).show();}
  }
 
- void inspectTikTok(String url){
-  Toast.makeText(this,"Consultando publicação pública...",Toast.LENGTH_SHORT).show();
+ void identifySong(String url,boolean interactive){
+  if(interactive)Toast.makeText(this,"Consultando créditos públicos do TikTok...",Toast.LENGTH_SHORT).show();
   new Thread(()->{
-   String canonical=url;String type="Link do TikTok";String player="";
-   try{
-    java.net.URL target=new java.net.URL(url);
-    java.net.HttpURLConnection connection=(java.net.HttpURLConnection)target.openConnection();
-    connection.setRequestMethod("HEAD");connection.setInstanceFollowRedirects(true);
-    connection.setConnectTimeout(9000);connection.setReadTimeout(9000);
-    connection.setRequestProperty("User-Agent","Mozilla/5.0");
-    connection.getResponseCode();
-    canonical=connection.getURL().toString();
-    connection.disconnect();
-   }catch(Exception ignored){}
-   Uri parsed=Uri.parse(canonical);
-   String host=parsed.getHost()==null?"":parsed.getHost().toLowerCase(java.util.Locale.ROOT);
-   if(!(host.equals("tiktok.com")||host.endsWith(".tiktok.com"))){canonical=url;parsed=Uri.parse(url);}
-   String path=parsed.getPath()==null?"":parsed.getPath();
-   Matcher videoId=Pattern.compile("/video/([0-9]+)").matcher(path);
-   if(videoId.find()){type="Vídeo";player="https://www.tiktok.com/player/v1/"+videoId.group(1)+"?music_info=1&description=1";}
-   else if(path.contains("/photo/"))type="Publicação com fotos";
-   String finalPlayer=player;String finalUrl=canonical;
-   String message="Tipo: "+type+"\n\nO TikTok não informou o nome e o artista do áudio por esta API. O player oficial pode exibir informações do som para conferência. Não confunda o criador da publicação com o artista da música.";
-   runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Consulta do TikTok").setMessage(message)
-    .setNegativeButton("Voltar",null)
-    .setNeutralButton("Informar música",(d,w)->edit(url))
-    .setPositiveButton(finalPlayer.isEmpty()?"Abrir TikTok":"Ver som no player",(d,w)->open(finalPlayer.isEmpty()?finalUrl:finalPlayer)).show());
+   TikTokMusicResolver.Result result=TikTokMusicResolver.lookup(url);
+   runOnUiThread(()->{
+    try{
+     JSONObject all=metadata();JSONObject item=all.optJSONObject(url);
+     if(item==null)item=new JSONObject();
+     if(result.verified()){
+      if(item.optString("song","").trim().isEmpty())item.put("song",result.title);
+      if(item.optString("artist","").trim().isEmpty())item.put("artist",result.artist);
+     }
+     item.put("recognition_status",result.status);
+     item.put("recognition_checked_at",System.currentTimeMillis());
+     item.put("recognition_source",result.source);
+     item.put("recognition_type",result.type);
+     item.put("recognition_reason",result.reason);
+     item.put("recognition_url",result.canonical);
+     item.put("sound_hint",result.soundHint);
+     all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
+     show();
+    }catch(Exception e){Toast.makeText(this,"Não foi possível salvar a consulta.",Toast.LENGTH_SHORT).show();}
+    if(!interactive)return;
+    String caption="Tipo: "+result.type+"\n";
+    if(result.verified())caption+="Música: "+result.title+"\nArtista: "+result.artist+"\n";
+    else caption+="Música e artista: não confirmados\n";
+    if(!result.soundHint.isEmpty())caption+="Som indicado: "+result.soundHint+"\n";
+    caption+="Estilo: não informado automaticamente\n\n"+result.reason;
+    new AlertDialog.Builder(this).setTitle(result.verified()?"Música identificada":"Consulta de música")
+     .setMessage(caption)
+     .setNegativeButton("Voltar",null)
+     .setNeutralButton("Editar música",(dialog,which)->edit(url))
+     .setPositiveButton("Abrir TikTok",(dialog,which)->open(result.canonical)).show();
+   });
   }).start();
  }
 
@@ -313,13 +320,21 @@ public class MainActivity extends Activity {
  TextView song=label(field(x,"song","Música não identificada"),19,fg,true);song.setPadding(0,12,0,3);card.addView(song);
  TextView artist=label(field(x,"artist","Artista não identificado"),14,muted,false);card.addView(artist);
  TextView genre=label("ESTILO  "+field(x,"genre","Não informado"),12,Color.rgb(255,171,78),false);genre.setPadding(0,12,0,10);card.addView(genre);
+ String recognition=x.optString("recognition_status","");
+ if(!recognition.isEmpty()){
+  String note="identified".equals(recognition)?"✓  CRÉDITOS DO SOM IDENTIFICADOS":
+    "original".equals(recognition)?"ÁUDIO ORIGINAL • CONFIRMAR ARTISTA":
+    "partial".equals(recognition)?"SOM ENCONTRADO • VERIFICAR DADOS":"IDENTIFICAÇÃO PENDENTE";
+  TextView status=label(note,11,"identified".equals(recognition)?accent:muted,true);
+  status.setPadding(0,4,0,10);card.addView(status);
+ }
  TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
  CheckBox choose=new CheckBox(this);choose.setText("Selecionar esta música");choose.setTextColor(fg);choose.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));choose.setChecked(isSelected(url));choose.setPadding(0,16,0,6);card.addView(choose);
  LinearLayout actions=new LinearLayout(this);actions.setOrientation(1);actions.setVisibility(isSelected(url)?View.VISIBLE:View.GONE);card.addView(actions);
  choose.setOnCheckedChangeListener((button,checked)->{prefs.edit().putBoolean("selected_"+url,checked).apply();actions.setVisibility(checked?View.VISIBLE:View.GONE);});
  Button edit=action("Editar música, artista e estilo",true);edit.setOnClickListener(v->edit(url));actions.addView(edit);
  Button open=action("Abrir no TikTok",false);open.setOnClickListener(v->open(url));actions.addView(open);
- Button inspect=action("Consultar áudio e publicação",false);inspect.setOnClickListener(v->inspectTikTok(url));actions.addView(inspect);
+ Button inspect=action("Identificar música automaticamente",false);inspect.setOnClickListener(v->identifySong(url,true));actions.addView(inspect);
 
  Button imageChoice=action("Imagem e logo • escolher / visualizar",true);imageChoice.setOnClickListener(v->imageOptions(url));actions.addView(imageChoice);
  Button exportArt=action("Exportar arte PNG • 1080 × 1920",false);exportArt.setOnClickListener(v->beginExport(url));actions.addView(exportArt);
