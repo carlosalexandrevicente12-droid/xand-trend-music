@@ -47,6 +47,7 @@ public final class ScriptExecutor {
           }
           // MANTER_NA_FILA does not duplicate: MainActivity already registered the link.
         }
+        prefs.edit().putString("script_last_run",scriptId+"|"+System.currentTimeMillis()).apply();
         return true;
       }
     }catch(Exception ignored){}
