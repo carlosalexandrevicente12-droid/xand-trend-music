@@ -39,9 +39,10 @@ public class MainActivity extends Activity {
     JSONObject flow=flows.optJSONObject(i);if(flow==null||!flow.optBoolean("enabled",false))continue;
     JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");if(nodes==null||edges==null)continue;
     java.util.HashMap<String,String> types=new java.util.HashMap<>();
+    java.util.HashMap<String,String> assignedScripts=new java.util.HashMap<>();
     java.util.ArrayDeque<String> todo=new java.util.ArrayDeque<>();
     java.util.HashSet<String> visited=new java.util.HashSet<>();
-    for(int j=0;j<nodes.length();j++){JSONObject n=nodes.optJSONObject(j);if(n==null)continue;String id=n.optString("id");String type=n.optString("type");if(id.isEmpty())continue;types.put(id,type);if("trigger_share".equals(type))todo.add(id);}
+    for(int j=0;j<nodes.length();j++){JSONObject n=nodes.optJSONObject(j);if(n==null)continue;String id=n.optString("id");String type=n.optString("type");if(id.isEmpty())continue;types.put(id,type);if("action_script".equals(type))assignedScripts.put(id,n.optString("scriptId",""));if("trigger_share".equals(type))todo.add(id);}
     int limit=0;
     while(!todo.isEmpty()&&limit++<60){
      String current=todo.removeFirst();if(!visited.add(current))continue;
@@ -49,6 +50,7 @@ public class MainActivity extends Activity {
      if("action_notify".equals(type))Toast.makeText(this,"XAND: link recebido pela automação.",Toast.LENGTH_SHORT).show();
      else if("action_copy".equals(type))((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));
      else if("action_open".equals(type))open(url);
+     else if("action_script".equals(type))ScriptExecutor.run(this,prefs,assignedScripts.getOrDefault(current,""),url);
      // action_queue is idempotent: add() already saved the received link.
      for(int e=0;e<edges.length();e++){JSONObject edge=edges.optJSONObject(e);if(edge!=null&&current.equals(edge.optString("from"))){String dest=edge.optString("to");if(types.containsKey(dest)&&!visited.contains(dest))todo.addLast(dest);}}
     }
@@ -106,6 +108,7 @@ public class MainActivity extends Activity {
  TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);TextView brandNote=label("●  MUSIC ANALYTICS  /  PRETO + LARANJA",11,Color.rgb(255,171,78),true);brandNote.setPadding(0,4,0,8);root.addView(brandNote);
  TextView kicker=label("BIBLIOTECA MUSICAL  •  TIKTOK",11,accent,true);kicker.setPadding(0,8,0,30);root.addView(kicker);
  Button workflows=action("◈ Criar automações • nós e conexões",true);workflows.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(workflows);
+ Button scripts=action("⌘ Scripts de automação",false);scripts.setOnClickListener(v->startActivity(new Intent(this,ScriptActivity.class)));root.addView(scripts);
  JSONArray a=load(),history=resolved();
  TextView count=label("Fila de músicas",23,fg,true);root.addView(count);
  TextView sub=label(a.length()+" pendente(s)   •   "+history.length()+" resolvido(s)",13,muted,false);sub.setPadding(0,6,0,25);root.addView(sub);
