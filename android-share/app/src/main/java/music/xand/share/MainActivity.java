@@ -42,21 +42,42 @@ public class MainActivity extends Activity {
   }
   final String url=pendingImageUrl;pendingImageUrl="";
   if(url.isEmpty())return;
-  JSONObject all=metadata();
-  java.util.Iterator<String> keys=all.keys();
-  while(keys.hasNext()){
-   String other=keys.next();
-   if(!other.equals(url)&&uri.toString().equals(all.optJSONObject(other)==null?"":all.optJSONObject(other).optString("image_uri"))){
-    new AlertDialog.Builder(this).setTitle("Imagem já utilizada").setMessage("Essa imagem já está associada a outra música. Deseja reutilizá-la mesmo assim?")
-     .setNegativeButton("Escolher outra",null).setPositiveButton("Reutilizar",(d,w)->saveImage(url,uri)).show();return;
-   }
-  }
-  saveImage(url,uri);
+  new Thread(()->{
+   String hash=hashImage(uri);
+   runOnUiThread(()->{
+    JSONObject all=metadata();java.util.Iterator<String> keys=all.keys();
+    while(keys.hasNext()){
+     String other=keys.next();JSONObject previous=all.optJSONObject(other);
+     if(other.equals(url)||previous==null)continue;
+     boolean sameUri=uri.toString().equals(previous.optString("image_uri"));
+     boolean sameBytes=!hash.isEmpty()&&hash.equals(previous.optString("image_sha256"));
+     if(sameUri||sameBytes){
+      new AlertDialog.Builder(this).setTitle("Imagem já utilizada").setMessage("Esta imagem já está vinculada a outra música. Deseja reutilizá-la mesmo assim?")
+       .setNegativeButton("Escolher outra",null).setPositiveButton("Reutilizar",(d,w)->saveImage(url,uri,hash)).show();return;
+     }
+    }
+    saveImage(url,uri,hash);
+   });
+  }).start();
  }
- void saveImage(String url,Uri uri){
+ String hashImage(Uri uri){
+  try(java.io.InputStream in=getContentResolver().openInputStream(uri)){
+   if(in==null)return "";
+   java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");
+   byte[] buffer=new byte[32768];long total=0;int n;
+   while((n=in.read(buffer))!=-1){
+    total+=n;if(total>50L*1024*1024)return "";
+    digest.update(buffer,0,n);
+   }
+   StringBuilder result=new StringBuilder();
+   for(byte value:digest.digest())result.append(String.format(java.util.Locale.ROOT,"%02x",value&255));
+   return result.toString();
+  }catch(Exception ignored){return "";}
+ }
+ void saveImage(String url,Uri uri,String sha256){
   try{
    JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item==null)item=new JSONObject();
-   item.put("image_uri",uri.toString());all.put(url,item);
+   item.put("image_uri",uri.toString());item.put("image_sha256",sha256);all.put(url,item);
    prefs.edit().putString("metadata",all.toString()).apply();
    Toast.makeText(this,"Imagem vinculada à música.",Toast.LENGTH_SHORT).show();show();
   }catch(Exception e){Toast.makeText(this,"Não foi possível registrar a imagem.",Toast.LENGTH_SHORT).show();}
@@ -79,7 +100,7 @@ public class MainActivity extends Activity {
     case 3:prepareArtwork(url);break;
     case 4:logoPosition();break;
     case 5:previewArt(url);break;
-    case 6:try{JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item!=null){item.remove("image_uri");all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();show();}}catch(Exception ignored){}break;
+    case 6:try{JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item!=null){item.remove("image_uri");item.remove("image_sha256");all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();show();}}catch(Exception ignored){}break;
    }
   }).show();
  }
