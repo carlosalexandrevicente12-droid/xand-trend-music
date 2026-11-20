@@ -30,14 +30,14 @@ public class MainActivity extends Activity {
  void share(String url){JSONObject x=info(url);String text=field(x,"song","Música não identificada")+" — "+field(x,"artist","Artista não identificado")+"\n"+field(x,"genre","")+"\n"+url;Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Compartilhar música"));}
  boolean isSelected(String url){return prefs.getBoolean("selected_"+url,false);}
  void setSelected(String url,boolean selected){prefs.edit().putBoolean("selected_"+url,selected).apply();show();}
- int bg=Color.rgb(5,5,11),panel=Color.rgb(16,12,26),stroke=Color.rgb(67,34,83),fg=Color.rgb(247,248,255),muted=Color.rgb(170,172,192),accent=Color.rgb(0,232,245);
+ int bg=Color.rgb(9,9,9),panel=Color.rgb(21,21,21),stroke=Color.rgb(48,48,48),fg=Color.rgb(245,245,245),muted=Color.rgb(166,166,166),accent=Color.rgb(255,133,0);
  GradientDrawable shape(int color,int radius,int border){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);if(border!=0)d.setStroke(2,border);return d;}
  TextView label(String value,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
- Button action(String text,boolean primary){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(13);b.setTextColor(primary?bg:fg);b.setBackground(shape(primary?accent:Color.rgb(39,22,55),20,primary?0:stroke));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,104);lp.topMargin=10;b.setLayoutParams(lp);return b;}
+ Button action(String text,boolean primary){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(13);b.setTextColor(primary?bg:fg);b.setBackground(shape(primary?accent:Color.rgb(42,42,42),20,primary?0:stroke));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,104);lp.topMargin=10;b.setLayoutParams(lp);return b;}
  void show(){
  root=new LinearLayout(this);root.setOrientation(1);root.setPadding(34,44,34,44);root.setBackgroundColor(bg);
  ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
- TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);TextView neon=label("●  ANALYTICS  /  CYAN + MAGENTA",11,Color.rgb(255,30,155),true);neon.setPadding(0,4,0,8);root.addView(neon);
+ TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);TextView brandNote=label("●  MUSIC ANALYTICS  /  PRETO + LARANJA",11,Color.rgb(255,171,78),true);brandNote.setPadding(0,4,0,8);root.addView(brandNote);
  TextView kicker=label("BIBLIOTECA MUSICAL  •  TIKTOK",11,accent,true);kicker.setPadding(0,8,0,30);root.addView(kicker);
  JSONArray a=load(),history=resolved();
  TextView count=label("Fila de músicas",23,fg,true);root.addView(count);
@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
  TextView number=label("FAIXA "+(i+1)+"  •  TIKTOK",11,accent,true);card.addView(number);
  TextView song=label(field(x,"song","Música não identificada"),19,fg,true);song.setPadding(0,12,0,3);card.addView(song);
  TextView artist=label(field(x,"artist","Artista não identificado"),14,muted,false);card.addView(artist);
- TextView genre=label("ESTILO  "+field(x,"genre","Não informado"),12,Color.rgb(255,45,166),false);genre.setPadding(0,12,0,10);card.addView(genre);
+ TextView genre=label("ESTILO  "+field(x,"genre","Não informado"),12,Color.rgb(255,171,78),false);genre.setPadding(0,12,0,10);card.addView(genre);
  TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
  CheckBox choose=new CheckBox(this);choose.setText("Selecionar esta música");choose.setTextColor(fg);choose.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));choose.setChecked(isSelected(url));choose.setPadding(0,16,0,6);card.addView(choose);
  LinearLayout actions=new LinearLayout(this);actions.setOrientation(1);actions.setVisibility(isSelected(url)?View.VISIBLE:View.GONE);card.addView(actions);
