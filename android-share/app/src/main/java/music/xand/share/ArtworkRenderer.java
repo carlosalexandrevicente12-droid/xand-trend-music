@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.Rect;
 import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -145,16 +146,37 @@ public final class ArtworkRenderer {
     canvas.drawText("XAND MUSIC  •  MUSIC ANALYTICS",86,1860,note);
   }
 
-  private static void drawLogo(Canvas canvas, Bitmap logo, String position) {
+  /** Trims only transparent margins; every visible logo pixel is retained. */
+  private static Rect visibleLogoBounds(Bitmap logo) throws IOException {
+    int w=logo.getWidth(),h=logo.getHeight();
+    int minX=w,minY=h,maxX=-1,maxY=-1;
+    for(int y=0;y<h;y++)for(int x=0;x<w;x++){
+      if((logo.getPixel(x,y)>>>24)>2){
+        if(x<minX)minX=x;if(x>maxX)maxX=x;
+        if(y<minY)minY=y;if(y>maxY)maxY=y;
+      }
+    }
+    if(maxX<minX)throw new IOException("A logo selecionada não contém pixels visíveis.");
+    int pad=Math.max(4,Math.min(w,h)/250);
+    return new Rect(Math.max(0,minX-pad),Math.max(0,minY-pad),
+      Math.min(w,maxX+1+pad),Math.min(h,maxY+1+pad));
+  }
+
+  private static void drawLogo(Canvas canvas, Bitmap logo, String position) throws IOException {
     boolean top=position==null || position.startsWith("Superior");
     boolean centered=position!=null && position.endsWith("centro");
     float left=centered?330:WIDTH-86-420;
     float y=top?85:1020;
     RectF space=new RectF(left,y,left+420,y+225);
-    RectF fitted=fitRect(logo,space);
+    Rect src=visibleLogoBounds(logo);
+    float scale=Math.min(space.width()/src.width(),space.height()/src.height());
+    float width=src.width()*scale,height=src.height()*scale;
+    RectF fitted=new RectF(space.centerX()-width/2,space.centerY()-height/2,
+      space.centerX()+width/2,space.centerY()+height/2);
     Paint back=new Paint(Paint.ANTI_ALIAS_FLAG);
     back.setColor(Color.argb(145,0,0,0));
     canvas.drawRoundRect(new RectF(fitted.left-20,fitted.top-14,fitted.right+20,fitted.bottom+14),16,16,back);
-    drawFit(canvas,logo,space);
+    Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+    canvas.drawBitmap(logo,src,fitted,paint);
   }
 }
