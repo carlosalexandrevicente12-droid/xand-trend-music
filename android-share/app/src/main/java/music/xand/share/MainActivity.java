@@ -260,8 +260,18 @@ public class MainActivity extends Activity {
      JSONObject all=metadata();JSONObject item=all.optJSONObject(url);
      if(item==null)item=new JSONObject();
      if(result.verified()){
-      if(item.optString("song","").trim().isEmpty())item.put("song",result.title);
-      if(item.optString("artist","").trim().isEmpty())item.put("artist",result.artist);
+      if(item.optString("song","").trim().isEmpty()){
+       item.put("song",result.title);item.put("auto_song",result.title);
+      }
+      if(item.optString("artist","").trim().isEmpty()){
+       item.put("artist",result.artist);item.put("auto_artist",result.artist);
+      }
+     }else{
+      String lastSong=item.optString("auto_song","");
+      String lastArtist=item.optString("auto_artist","");
+      if(!lastSong.isEmpty()&&lastSong.equals(item.optString("song","")))item.remove("song");
+      if(!lastArtist.isEmpty()&&lastArtist.equals(item.optString("artist","")))item.remove("artist");
+      item.remove("auto_song");item.remove("auto_artist");
      }
      item.put("recognition_status",result.status);
      item.put("recognition_checked_at",System.currentTimeMillis());
