@@ -3,6 +3,7 @@ package music.xand.share;
 import android.app.Activity;
 import android.os.Bundle;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -28,6 +29,8 @@ public class WorkflowActivity extends Activity {
     setContentView(editor);
   }
   final class Bridge {
+    @JavascriptInterface public String scripts(){return prefs.getString("scripts_v1","{\"version\":1,\"scripts\":[]}");}
+    @JavascriptInterface public void openScripts(){runOnUiThread(()->startActivity(new Intent(WorkflowActivity.this,ScriptActivity.class)));}
     @JavascriptInterface public String load(){
       return prefs.getString("workflows_v1","{\"version\":1,\"flows\":[]}");
     }
