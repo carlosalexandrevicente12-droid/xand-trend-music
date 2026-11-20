@@ -15,13 +15,14 @@ import java.util.regex.*;
 
 public class MainActivity extends Activity {
  SharedPreferences prefs; LinearLayout root;
- String pendingImageUrl="";
+ String pendingImageUrl="",pendingExportUrl="";
  JSONArray load(){try{return new JSONArray(prefs.getString("queue","[]"));}catch(Exception e){return new JSONArray();}}
  void save(JSONArray a){prefs.edit().putString("queue",a.toString()).apply();}
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString()).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!url.contains("tiktok.com"))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);runShareFlows(url);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(Intent.ACTION_SEND.equals(getIntent().getAction()))add(getIntent().getStringExtra(Intent.EXTRA_TEXT));show();}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");}if(Intent.ACTION_SEND.equals(getIntent().getAction()))add(getIntent().getStringExtra(Intent.EXTRA_TEXT));show();}
+ @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(Intent.ACTION_SEND.equals(intent.getAction()))add(intent.getStringExtra(Intent.EXTRA_TEXT));show();}
 
  void selectImage(String url,boolean logo){
@@ -33,6 +34,11 @@ public class MainActivity extends Activity {
  }
  @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
   super.onActivityResult(requestCode,resultCode,data);
+  if(requestCode==82){
+   String url=pendingExportUrl;pendingExportUrl="";
+   if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&!url.isEmpty())renderExport(url,data.getData());
+   return;
+  }
   if(resultCode!=RESULT_OK||data==null||data.getData()==null||(requestCode!=80&&requestCode!=81))return;
   Uri uri=data.getData();
   try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException ignored){}
@@ -91,7 +97,7 @@ public class MainActivity extends Activity {
   }).setNegativeButton("Cancelar",null).show();
  }
  void imageOptions(String url){
-  String[] choices={"Escolher imagem do celular","Registrar logo original XAND","Buscar no Pinterest","Preparar arte com ChatGPT","Definir posição da logo","Visualizar prévia 9:16","Remover imagem desta música"};
+  String[] choices={"Escolher imagem do celular","Registrar logo original XAND","Buscar no Pinterest","Preparar arte com ChatGPT","Definir posição da logo","Visualizar prévia 9:16","Exportar PNG 1080 × 1920","Remover imagem desta música"};
   new AlertDialog.Builder(this).setTitle("Imagens e arte • XAND MUSIC").setItems(choices,(d,w)->{
    switch(w){
     case 0:selectImage(url,false);break;
@@ -100,10 +106,83 @@ public class MainActivity extends Activity {
     case 3:prepareArtwork(url);break;
     case 4:logoPosition();break;
     case 5:previewArt(url);break;
-    case 6:try{JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item!=null){item.remove("image_uri");item.remove("image_sha256");all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();show();}}catch(Exception ignored){}break;
+    case 6:beginExport(url);break;
+    case 7:try{JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item!=null){item.remove("image_uri");item.remove("image_sha256");all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();show();}}catch(Exception ignored){}break;
    }
   }).show();
  }
+
+ void beginExport(String url){
+  if(needsMetadata(url))return;
+  JSONObject item=info(url);
+  if(item.optString("image_uri","").isEmpty()){
+   new AlertDialog.Builder(this).setTitle("Imagem necessária").setMessage("Escolha uma imagem de fundo para a música antes de exportar.")
+    .setNegativeButton("Voltar",null).setPositiveButton("Escolher imagem",(d,w)->selectImage(url,false)).show();return;
+  }
+  if(prefs.getString("logo_uri","").isEmpty()){
+   new AlertDialog.Builder(this).setTitle("Logo original necessária")
+    .setMessage("Selecione o arquivo original da logo XAND. A exportação manterá a imagem completa, sem cortes nem alterações.")
+    .setNegativeButton("Voltar",null).setPositiveButton("Escolher logo",(d,w)->selectImage(url,true)).show();return;
+  }
+  String base=(field(item,"song","")+"_"+field(item,"artist",""))
+    .replaceAll("[^\\p{L}\\p{N} _-]","").trim().replaceAll("\\s+","_");
+  if(base.isEmpty())base="XAND_MUSIC";
+  if(base.length()>65)base=base.substring(0,65);
+  Intent output=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+  output.addCategory(Intent.CATEGORY_OPENABLE);
+  output.setType("image/png");
+  output.putExtra(Intent.EXTRA_TITLE,"XAND_"+base+".png");
+  output.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  pendingExportUrl=url;
+  try{startActivityForResult(output,82);}
+  catch(Exception e){pendingExportUrl="";Toast.makeText(this,"Não foi possível abrir a escolha de destino.",Toast.LENGTH_LONG).show();}
+ }
+ void renderExport(String url,Uri destination){
+  JSONObject item=info(url);
+  String background=item.optString("image_uri",""),logo=prefs.getString("logo_uri","");
+  String title=item.optString("song",""),artist=item.optString("artist",""),genre=item.optString("genre","");
+  String position=prefs.getString("logo_position","Superior direita");
+  ProgressBar spinner=new ProgressBar(this);
+  spinner.setPadding(28,20,28,20);
+  AlertDialog waiting=new AlertDialog.Builder(this).setTitle("Exportando arte 1080 × 1920").setMessage("Aguarde. A arte é montada na memória.")
+    .setView(spinner).setCancelable(false).create();
+  waiting.show();
+  new Thread(()->{
+   String error=null;
+   try{
+    if(background.isEmpty()||logo.isEmpty())throw new java.io.IOException("Selecione imagem e logo antes de exportar.");
+    try(java.io.OutputStream output=getContentResolver().openOutputStream(destination,"w")){
+     if(output==null)throw new java.io.IOException("Não foi possível gravar no destino escolhido.");
+     ArtworkRenderer.export(this,Uri.parse(background),Uri.parse(logo),title,artist,genre,position,output);
+    }
+   }catch(Exception e){error=e.getMessage()==null?"Falha ao exportar a arte.":e.getMessage();}
+   String failure=error;
+   runOnUiThread(()->{
+    waiting.dismiss();
+    if(failure!=null){
+     new AlertDialog.Builder(this).setTitle("Exportação não concluída")
+      .setMessage(failure+"\nSe o aplicativo de arquivos criou um documento vazio, descarte-o pelo gerenciador de arquivos.")
+      .setPositiveButton("Entendi",null).show();
+     return;
+    }
+    prefs.edit().putString("art_export_last",url+"|"+System.currentTimeMillis()).apply();
+    new AlertDialog.Builder(this).setTitle("Arte exportada")
+     .setMessage("PNG 1080 × 1920 salvo no destino selecionado. Imagem e logo preservadas sem recorte.")
+     .setNegativeButton("Concluir",null)
+     .setNeutralButton("Abrir",(d,w)->{
+      try{Intent openFile=new Intent(Intent.ACTION_VIEW);openFile.setDataAndType(destination,"image/png");
+       openFile.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(openFile);}
+      catch(Exception ex){Toast.makeText(this,"Não há aplicativo disponível para abrir o PNG.",Toast.LENGTH_SHORT).show();}
+     })
+     .setPositiveButton("Compartilhar",(d,w)->{
+      try{Intent send=new Intent(Intent.ACTION_SEND);send.setType("image/png");send.putExtra(Intent.EXTRA_STREAM,destination);
+       send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(send,"Compartilhar arte XAND"));}
+      catch(Exception ex){Toast.makeText(this,"Não foi possível compartilhar a imagem.",Toast.LENGTH_SHORT).show();}
+     }).show();
+   });
+  }).start();
+ }
+
  void previewArt(String url){
   JSONObject item=info(url);
   int width=(int)(getResources().getDisplayMetrics().widthPixels*.67f);
@@ -129,7 +208,7 @@ public class MainActivity extends Activity {
   frame.addView(names,titleLp);
   LinearLayout body=new LinearLayout(this);body.setOrientation(1);body.setPadding(15,12,15,12);
   body.addView(frame,new LinearLayout.LayoutParams(width,height));
-  TextView note=label("Prévia local • imagens e logo completas, sem recorte. Nenhum arquivo foi gerado ou salvo.",12,muted,false);
+  TextView note=label("Prévia de posicionamento • a exportação adapta os textos em 1080×1920. Nenhum arquivo foi gerado ou salvo.",12,muted,false);
   note.setPadding(0,12,0,2);body.addView(note);
   ScrollView scroll=new ScrollView(this);scroll.addView(body);
   new AlertDialog.Builder(this).setTitle("Prévia da composição 9:16").setView(scroll)
@@ -243,6 +322,7 @@ public class MainActivity extends Activity {
  Button inspect=action("Consultar áudio e publicação",false);inspect.setOnClickListener(v->inspectTikTok(url));actions.addView(inspect);
 
  Button imageChoice=action("Imagem e logo • escolher / visualizar",true);imageChoice.setOnClickListener(v->imageOptions(url));actions.addView(imageChoice);
+ Button exportArt=action("Exportar arte PNG • 1080 × 1920",false);exportArt.setOnClickListener(v->beginExport(url));actions.addView(exportArt);
  Button searchPin=action("Buscar arte no Pinterest",false);searchPin.setOnClickListener(v->pinterest(url));actions.addView(searchPin);
  Button artwork=action("Preparar arte com ChatGPT",false);artwork.setOnClickListener(v->prepareArtwork(url));actions.addView(artwork);
  Button captionBtn=action("Gerar legenda para TikTok",true);captionBtn.setOnClickListener(v->prepareCaption(url));actions.addView(captionBtn);
