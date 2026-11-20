@@ -165,10 +165,12 @@ public final class ArtworkRenderer {
   /** Generates an in-memory preview without touching the original image file. */
   public static Bitmap loadLogoPreview(Context context,Uri uri) throws IOException {
     Bitmap original=decodeImage(context,uri);
+    Bitmap preview=null;
     try {
       Rect area=visibleLogoBounds(original);
-      return Bitmap.createBitmap(original,area.left,area.top,area.width(),area.height());
-    } finally {original.recycle();}
+      preview=Bitmap.createBitmap(original,area.left,area.top,area.width(),area.height());
+      return preview;
+    } finally {if(preview!=original)original.recycle();}
   }
 
   private static void drawLogo(Canvas canvas, Bitmap logo, String position) throws IOException {
