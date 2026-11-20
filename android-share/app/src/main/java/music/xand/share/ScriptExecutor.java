@@ -45,7 +45,7 @@ public final class ScriptExecutor {
           else if(line.equals("COPIAR_LINK")){
             ((ClipboardManager)activity.getSystemService(Activity.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("TikTok",url));
           }else if(line.equals("ABRIR_TIKTOK")){
-            try{activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception error){Toast.makeText(activity,"Não foi possível abrir o TikTok.",Toast.LENGTH_SHORT).show();}
+            try{Intent external=new Intent(Intent.ACTION_VIEW,Uri.parse(url));external.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);activity.startActivity(external);}catch(Exception error){Toast.makeText(activity,"Não foi possível abrir o TikTok.",Toast.LENGTH_SHORT).show();}
           }
 
           else if(activity instanceof MainActivity){
