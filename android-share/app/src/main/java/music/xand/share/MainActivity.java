@@ -29,6 +29,37 @@ public class MainActivity extends Activity {
  void open(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception e){Toast.makeText(this,"Não foi possível abrir o link",Toast.LENGTH_SHORT).show();}}
  void share(String url){JSONObject x=info(url);String text=field(x,"song","Música não identificada")+" — "+field(x,"artist","Artista não identificado")+"\n"+field(x,"genre","")+"\n"+url;Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Compartilhar música"));}
  
+ 
+ void inspectTikTok(String url){
+  Toast.makeText(this,"Consultando publicação pública...",Toast.LENGTH_SHORT).show();
+  new Thread(()->{
+   String canonical=url;String type="Link do TikTok";String player="";
+   try{
+    java.net.URL target=new java.net.URL(url);
+    java.net.HttpURLConnection connection=(java.net.HttpURLConnection)target.openConnection();
+    connection.setRequestMethod("HEAD");connection.setInstanceFollowRedirects(true);
+    connection.setConnectTimeout(9000);connection.setReadTimeout(9000);
+    connection.setRequestProperty("User-Agent","Mozilla/5.0");
+    connection.getResponseCode();
+    canonical=connection.getURL().toString();
+    connection.disconnect();
+   }catch(Exception ignored){}
+   Uri parsed=Uri.parse(canonical);
+   String host=parsed.getHost()==null?"":parsed.getHost().toLowerCase(java.util.Locale.ROOT);
+   if(!(host.equals("tiktok.com")||host.endsWith(".tiktok.com"))){canonical=url;parsed=Uri.parse(url);}
+   String path=parsed.getPath()==null?"":parsed.getPath();
+   Matcher videoId=Pattern.compile("/video/([0-9]+)").matcher(path);
+   if(videoId.find()){type="Vídeo";player="https://www.tiktok.com/player/v1/"+videoId.group(1)+"?music_info=1&description=1";}
+   else if(path.contains("/photo/"))type="Publicação com fotos";
+   String finalPlayer=player;String finalUrl=canonical;
+   String message="Tipo: "+type+"\n\nO TikTok não informou o nome e o artista do áudio por esta API. O player oficial pode exibir informações do som para conferência. Não confunda o criador da publicação com o artista da música.";
+   runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Consulta do TikTok").setMessage(message)
+    .setNegativeButton("Voltar",null)
+    .setNeutralButton("Informar música",(d,w)->edit(url))
+    .setPositiveButton(finalPlayer.isEmpty()?"Abrir TikTok":"Ver som no player",(d,w)->open(finalPlayer.isEmpty()?finalUrl:finalPlayer)).show());
+  }).start();
+ }
+
  void copyText(String title,String value){((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText(title,value));Toast.makeText(this,"Copiado.",Toast.LENGTH_SHORT).show();}
  void shareText(String title,String value){Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,value);startActivity(Intent.createChooser(send,title));}
  boolean needsMetadata(String url){JSONObject x=info(url);if(x.optString("song","").trim().isEmpty()||x.optString("artist","").trim().isEmpty()){Toast.makeText(this,"Preencha música e artista primeiro.",Toast.LENGTH_LONG).show();edit(url);return true;}return false;}
@@ -65,6 +96,8 @@ public class MainActivity extends Activity {
  choose.setOnCheckedChangeListener((button,checked)->{prefs.edit().putBoolean("selected_"+url,checked).apply();actions.setVisibility(checked?View.VISIBLE:View.GONE);});
  Button edit=action("Editar música, artista e estilo",true);edit.setOnClickListener(v->edit(url));actions.addView(edit);
  Button open=action("Abrir no TikTok",false);open.setOnClickListener(v->open(url));actions.addView(open);
+ Button inspect=action("Consultar áudio e publicação",false);inspect.setOnClickListener(v->inspectTikTok(url));actions.addView(inspect);
+
  Button searchPin=action("Buscar arte no Pinterest",false);searchPin.setOnClickListener(v->pinterest(url));actions.addView(searchPin);
  Button artwork=action("Preparar arte com ChatGPT",false);artwork.setOnClickListener(v->prepareArtwork(url));actions.addView(artwork);
  Button captionBtn=action("Gerar legenda para TikTok",true);captionBtn.setOnClickListener(v->prepareCaption(url));actions.addView(captionBtn);
