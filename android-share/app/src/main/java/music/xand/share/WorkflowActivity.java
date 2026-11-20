@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
 import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -21,6 +22,7 @@ public class WorkflowActivity extends Activity {
     editor.getSettings().setDomStorageEnabled(true);
     editor.setBackgroundColor(0xff090909);
     editor.setWebViewClient(new WebViewClient());
+    editor.setWebChromeClient(new WebChromeClient());
     editor.addJavascriptInterface(new Bridge(),"Xand");
     editor.loadUrl("file:///android_asset/flows.html");
     setContentView(editor);
