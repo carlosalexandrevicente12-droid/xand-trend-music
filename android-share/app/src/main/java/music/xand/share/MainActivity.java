@@ -19,11 +19,11 @@ public class MainActivity extends Activity {
  JSONArray load(){try{return new JSONArray(prefs.getString("queue","[]"));}catch(Exception e){return new JSONArray();}}
  void save(JSONArray a){prefs.edit().putString("queue",a.toString()).apply();}
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
- void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString()).apply();show();}
+ void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);runShareFlows(url);identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");}if(Intent.ACTION_SEND.equals(getIntent().getAction()))add(getIntent().getStringExtra(Intent.EXTRA_TEXT));show();}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");}if(Intent.ACTION_SEND.equals(getIntent().getAction())){String shared=getIntent().getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);super.onSaveInstanceState(state);}
- @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(Intent.ACTION_SEND.equals(intent.getAction()))add(intent.getStringExtra(Intent.EXTRA_TEXT));show();}
+ @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(Intent.ACTION_SEND.equals(intent.getAction())){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
 
  void selectImage(String url,boolean logo){
   pendingImageUrl=logo?"":url;
@@ -220,6 +220,74 @@ public class MainActivity extends Activity {
  String field(JSONObject x,String key,String fallback){String s=x.optString(key,"").trim();return s.isEmpty()?fallback:s;}
  void edit(String url){JSONObject x=info(url);LinearLayout fields=new LinearLayout(this);fields.setOrientation(1);fields.setPadding(32,16,32,0);EditText song=new EditText(this);song.setHint("Nome da música");song.setSingleLine(true);song.setText(x.optString("song"));fields.addView(song);EditText artist=new EditText(this);artist.setHint("Artista");artist.setSingleLine(true);artist.setText(x.optString("artist"));fields.addView(artist);EditText genre=new EditText(this);genre.setHint("Estilo musical (opcional)");genre.setSingleLine(true);genre.setText(x.optString("genre"));fields.addView(genre);new AlertDialog.Builder(this).setTitle("Dados da música").setView(fields).setNegativeButton("Cancelar",null).setPositiveButton("Salvar",(d,w)->{try{JSONObject all=metadata();JSONObject info=all.optJSONObject(url);if(info==null)info=new JSONObject();info.put("song",song.getText().toString().trim());info.put("artist",artist.getText().toString().trim());info.put("genre",genre.getText().toString().trim());all.put(url,info);prefs.edit().putString("metadata",all.toString()).apply();show();}catch(Exception e){Toast.makeText(this,"Erro ao salvar",Toast.LENGTH_SHORT).show();}}).show();}
  void open(String url){try{Intent external=new Intent(Intent.ACTION_VIEW,Uri.parse(url));external.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);startActivity(external);}catch(Exception e){Toast.makeText(this,"Não foi possível abrir o link",Toast.LENGTH_SHORT).show();}}
+
+ boolean isTikTokShare(String shared){
+  if(shared==null)return false;
+  Matcher urls=Pattern.compile("https?://[^\\s]+").matcher(shared);
+  while(urls.find())if(TikTokMusicResolver.isTrustedLink(urls.group().replaceAll("[),.;]+$","")))return true;
+  return false;
+ }
+ boolean queued(String url){
+  if(url==null||url.isEmpty())return false;
+  JSONArray items=load();for(int i=0;i<items.length();i++)if(url.equals(items.optString(i)))return true;
+  return false;
+ }
+ void launchAudile(String url){
+  Intent external=getPackageManager().getLaunchIntentForPackage("com.mrsep.musicrecognizer");
+  if(external==null){
+   new AlertDialog.Builder(this).setTitle("Reconhecimento por áudio")
+    .setMessage("Audile não está instalado. É um aplicativo gratuito de código aberto. Instale a versão oficial pelo GitHub.")
+    .setNegativeButton("Cancelar",null)
+    .setPositiveButton("GitHub oficial",(d,w)->open("https://github.com/AudileTeam/Audile/releases/latest")).show();
+   return;
+  }
+  prefs.edit().putString("recognition_pending_url",url).apply();
+  try{
+   external.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+   startActivity(external);
+   Toast.makeText(this,"Reconheça no Audile e use Compartilhar → XAND MUSIC.",Toast.LENGTH_LONG).show();
+  }catch(Exception e){Toast.makeText(this,"Não foi possível abrir o Audile.",Toast.LENGTH_LONG).show();}
+ }
+ void importAudioResult(String shared){
+  if(shared==null||shared.trim().isEmpty())return;
+  String url=prefs.getString("recognition_pending_url","");
+  if(!queued(url)){
+   new AlertDialog.Builder(this).setTitle("Resultado de áudio recebido")
+    .setMessage("Nenhuma música da fila está vinculada a este reconhecimento. Selecione uma música no XAND MUSIC e toque em 'Reconhecer áudio • Audile' antes de compartilhar o resultado.")
+    .setPositiveButton("Entendi",null).show();
+   return;
+  }
+  String first=shared.split("\\r?\\n",2)[0].trim();
+  String title=first,artist="";
+  int dash=first.indexOf(" - ");
+  if(dash>0){title=first.substring(0,dash).trim();artist=first.substring(dash+3).trim();}
+  JSONObject previous=info(url);
+  LinearLayout fields=new LinearLayout(this);fields.setOrientation(1);fields.setPadding(32,16,32,0);
+  TextView target=label("Confirmar reconhecimento para o link:\n"+url,12,muted,false);fields.addView(target);
+  EditText song=new EditText(this);song.setHint("Música identificada");song.setSingleLine(true);song.setText(title);fields.addView(song);
+  EditText performer=new EditText(this);performer.setHint("Artista identificado");performer.setSingleLine(true);performer.setText(artist);fields.addView(performer);
+  EditText genre=new EditText(this);genre.setHint("Estilo musical (opcional)");genre.setSingleLine(true);genre.setText(previous.optString("genre"));fields.addView(genre);
+  AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Importar resultado do Audile")
+   .setMessage("Confira os dados compartilhados antes de vincular à música. A identificação acústica não garante correspondência exata.")
+   .setView(fields).setNegativeButton("Cancelar",null).setPositiveButton("Salvar na fila",null).create();
+  dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+   String titleText=song.getText().toString().trim(),artistText=performer.getText().toString().trim();
+   if(titleText.isEmpty()||artistText.isEmpty()){
+    Toast.makeText(this,"Informe música e artista antes de salvar.",Toast.LENGTH_LONG).show();return;
+   }
+   if(!queued(url)){Toast.makeText(this,"Este link não está mais na fila.",Toast.LENGTH_LONG).show();dialog.dismiss();return;}
+   try{
+    JSONObject all=metadata(),item=all.optJSONObject(url);
+    if(item==null)item=new JSONObject();
+    item.put("song",titleText);item.put("artist",artistText);item.put("genre",genre.getText().toString().trim());
+    item.put("audio_import_confirmed",true);
+    all.put(url,item);
+    prefs.edit().putString("metadata",all.toString()).remove("recognition_pending_url").apply();
+    dialog.dismiss();show();
+   }catch(Exception e){Toast.makeText(this,"Não foi possível salvar o resultado.",Toast.LENGTH_LONG).show();}
+  }));
+  dialog.show();
+ }
  void share(String url){JSONObject x=info(url);String text=field(x,"song","Música não identificada")+" — "+field(x,"artist","Artista não identificado")+"\n"+field(x,"genre","")+"\n"+url;Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(send,"Compartilhar música"));}
  
  
@@ -345,6 +413,7 @@ public class MainActivity extends Activity {
  Button edit=action("Editar música, artista e estilo",true);edit.setOnClickListener(v->edit(url));actions.addView(edit);
  Button open=action("Abrir no TikTok",false);open.setOnClickListener(v->open(url));actions.addView(open);
  Button inspect=action("Identificar música automaticamente",false);inspect.setOnClickListener(v->identifySong(url,true));actions.addView(inspect);
+ Button audile=action("♫ Reconhecer áudio • Audile (grátis)",false);audile.setOnClickListener(v->launchAudile(url));actions.addView(audile);
 
  Button imageChoice=action("Imagem e logo • escolher / visualizar",true);imageChoice.setOnClickListener(v->imageOptions(url));actions.addView(imageChoice);
  Button exportArt=action("Exportar arte PNG • 1080 × 1920",false);exportArt.setOnClickListener(v->beginExport(url));actions.addView(exportArt);
