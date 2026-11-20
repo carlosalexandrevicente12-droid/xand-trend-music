@@ -4,10 +4,11 @@
 <header><h1>XAND <span>SCRIPTS</span></h1><p>Biblioteca local de procedimentos para automações por nós.</p></header>
 <main>
 <div class="row"><select id="list" aria-label="Escolher script"></select><button id="new">+ Novo script</button><button id="remove">Excluir</button></div>
+<div class="row"><select id="template" aria-label="Modelo de script"><option value="">Modelos rápidos de scripts</option><option value="caption">Gerar legenda TikTok</option><option value="copycaption">Copiar legenda pronta</option><option value="pinterest">Pesquisar imagem Pinterest</option><option value="art">Preparar arte no ChatGPT</option></select><button id="useTemplate" type="button">Usar modelo</button></div>
 <label class="field">NOME DO SCRIPT <input id="name" maxlength="80" placeholder="Ex.: Link recebido → aviso"></label>
 <label class="field">COMANDOS <textarea id="code" class="editor" spellcheck="false" placeholder="AVISAR Link recebido&#10;COPIAR_LINK"></textarea></label>
 <div class="row"><button id="check">Verificar sintaxe</button><button id="save" class="primary">Salvar scripts</button></div><div class="status" id="status" role="status"></div>
-<article><h2>Comandos disponíveis</h2><p class="help"><code>AVISAR Sua mensagem</code> — mostra um aviso na tela.</p><p class="help"><code>COPIAR_LINK</code> — copia o link do TikTok.</p><p class="help"><code>ABRIR_TIKTOK</code> — abre o link no TikTok.</p><p class="help"><code>MANTER_NA_FILA</code> — mantém o registro na fila, sem duplicar.</p><p class="help">Linhas iniciadas com # são comentários. Scripts só executam quando vinculados a um nó de automação ativo. Não executam comandos de sistema, JavaScript nem código externo.</p></article>
+<article><h2>Comandos disponíveis</h2><p class="help"><code>AVISAR Sua mensagem</code> — mostra um aviso na tela.</p><p class="help"><code>COPIAR_LINK</code> — copia o link do TikTok.</p><p class="help"><code>ABRIR_TIKTOK</code> — abre o link no TikTok.</p><p class="help"><code>MANTER_NA_FILA</code> — mantém o registro na fila, sem duplicar.</p><p class="help"><code>GERAR_LEGENDA</code> — prepara uma legenda editável para TikTok.</p><p class="help"><code>COPIAR_LEGENDA</code> — copia a legenda a partir da música e do artista cadastrados.</p><p class="help"><code>BUSCAR_PINTEREST</code> — abre uma pesquisa com nome da música, artista e estilo.</p><p class="help"><code>PREPARAR_ARTE</code> — prepara instruções de arte 9:16 para enviar ao ChatGPT.</p><p class="help">Linhas iniciadas com # são comentários. Scripts só executam quando vinculados a um nó de automação ativo. Os comandos de legenda, Pinterest e arte exigem música e artista informados; nenhum conteúdo é publicado automaticamente. Use no máximo uma ação visual por script. Não executam comandos de sistema, JavaScript nem código externo.</p></article>
 </main><script>
 (()=>{
 'use strict';
@@ -27,7 +28,16 @@ $('code').oninput=collect;
 $('list').onchange=()=>{collect();index=Number($('list').value)||0;render();};
 $('new').onclick=()=>{collect();if(scripts.length>=30){message('Limite de 30 scripts.');return}scripts.push(blank());index=scripts.length-1;render();message('Novo script criado. Salve quando terminar.')};
 $('remove').onclick=()=>{if(!confirm('Excluir este script da biblioteca?'))return;scripts.splice(index,1);if(!scripts.length)scripts=[blank()];index=Math.min(index,scripts.length-1);render();message('Script excluído. Salve para confirmar a alteração.')};
+
+const examples={
+ caption:{name:'Legenda TikTok',body:'# Exige nome da música e artista cadastrados\nGERAR_LEGENDA'},
+ copycaption:{name:'Copiar legenda',body:'# Copia legenda para a área de transferência\nCOPIAR_LEGENDA'},
+ pinterest:{name:'Buscar imagem no Pinterest',body:'# Pesquisa imagens relacionadas à música\nBUSCAR_PINTEREST'},
+ art:{name:'Preparar arte XAND MUSIC',body:'# Abre o compartilhamento de instruções para arte 9:16\nPREPARAR_ARTE'}
+};
+$('useTemplate').onclick=()=>{let example=examples[$('template').value];if(!example){message('Escolha um modelo.');return}current().name=example.name;current().body=example.body;render();message('Modelo carregado. Salve para confirmar.')};
 $('check').onclick=()=>{collect();message(bridge?.check(current().body)||'Verificação indisponível.')};
+
 $('save').onclick=()=>{collect();try{let result=bridge?.save(JSON.stringify({version:1,scripts}));message(result==='OK'?'Scripts salvos neste Motorola.':(result||'Erro ao salvar.'))}catch(e){message('Falha ao salvar.')}};
 })();
 </script></body></html>
