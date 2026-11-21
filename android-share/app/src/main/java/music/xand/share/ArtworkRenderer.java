@@ -49,7 +49,7 @@ public final class ArtworkRenderer {
       Canvas canvas = new Canvas(output);
       canvas.drawColor(Color.rgb(9,9,9));
       drawFit(canvas, background, new RectF(0,0,WIDTH,HEIGHT));
-      drawFooter(canvas, title.trim(), artist.trim(), genre == null ? "" : genre.trim());
+      drawFooter(canvas, title.trim(), artist.trim(), genre == null ? "" : genre.trim(), logoYPercent>=50);
       drawLogo(canvas, logo, logoPosition, logoXPercent, logoYPercent, logoWidthPercent);
       if (!output.compress(Bitmap.CompressFormat.PNG, 100, stream))
         throw new IOException("Falha ao codificar a arte em PNG.");
@@ -117,7 +117,7 @@ public final class ArtworkRenderer {
     canvas.save(); canvas.translate(x,y); text.draw(canvas); canvas.restore();
   }
 
-  private static void drawFooter(Canvas canvas, String title, String artist, String genre) throws IOException {
+  private static void drawFooter(Canvas canvas, String title, String artist, String genre, boolean bottomLogo) throws IOException {
     StaticLayout titleText=null,artistText=null,genreText=null;
     int size=90;
     int totalHeight=0;
@@ -132,12 +132,12 @@ public final class ArtworkRenderer {
     if(totalHeight>535)
       throw new IOException("Nome da música ou artista longo demais para uma arte sem cortes.");
 
-    int top=HEIGHT-112-totalHeight;
+    int top=bottomLogo?Math.max(500,1050-totalHeight):HEIGHT-112-totalHeight;
     Paint scrim = new Paint(Paint.ANTI_ALIAS_FLAG);
-    scrim.setShader(new LinearGradient(0,Math.max(850,top-150),0,HEIGHT,
+    scrim.setShader(new LinearGradient(0,Math.max(bottomLogo?350:850,top-150),0,bottomLogo?1170:HEIGHT,
       new int[]{Color.TRANSPARENT,Color.argb(220,0,0,0),Color.argb(247,0,0,0)},
       new float[]{0f,.40f,1f},Shader.TileMode.CLAMP));
-    canvas.drawRect(0,Math.max(850,top-150),WIDTH,HEIGHT,scrim);
+    canvas.drawRect(0,Math.max(bottomLogo?350:850,top-150),WIDTH,bottomLogo?1170:HEIGHT,scrim);
 
     Paint line=new Paint(Paint.ANTI_ALIAS_FLAG);
     line.setColor(ORANGE);
@@ -149,7 +149,7 @@ public final class ArtworkRenderer {
     drawLayout(canvas,artistText,86,y);
     TextPaint note=new TextPaint(Paint.ANTI_ALIAS_FLAG);
     note.setTextSize(25);note.setColor(Color.rgb(184,184,184));note.setTypeface(Typeface.DEFAULT_BOLD);
-    canvas.drawText("XAND MUSIC  •  MUSIC ANALYTICS",86,1860,note);
+    canvas.drawText("XAND MUSIC  •  MUSIC ANALYTICS",86,bottomLogo?1130:1860,note);
   }
 
   /** Trims only transparent margins; every visible logo pixel is retained. */
@@ -304,7 +304,7 @@ public final class ArtworkRenderer {
       bitmap=Bitmap.createBitmap(WIDTH,HEIGHT,Bitmap.Config.ARGB_8888);
       Canvas canvas=new Canvas(bitmap);
       drawOriginalBackdrop(canvas,seed,style);
-      drawFooter(canvas,title.trim(),artist.trim(),genre==null?"":genre.trim());
+      drawFooter(canvas,title.trim(),artist.trim(),genre==null?"":genre.trim(), logoYPercent>=50);
       drawLogo(canvas,logo,"Superior direita",logoXPercent,logoYPercent,logoWidthPercent);
       if(!bitmap.compress(Bitmap.CompressFormat.PNG,100,stream))
         throw new IOException("Não foi possível gerar a arte PNG.");
