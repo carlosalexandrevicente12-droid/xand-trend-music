@@ -221,6 +221,26 @@ public class MainActivity extends Activity {
  JSONObject info(String url){JSONObject x=metadata().optJSONObject(url);return x==null?new JSONObject():x;}
  String field(JSONObject x,String key,String fallback){String s=x.optString(key,"").trim();return s.isEmpty()?fallback:s;}
  void edit(String url){JSONObject x=info(url);LinearLayout fields=new LinearLayout(this);fields.setOrientation(1);fields.setPadding(32,16,32,0);EditText song=new EditText(this);song.setHint("Nome da música");song.setSingleLine(true);song.setText(x.optString("song"));fields.addView(song);EditText artist=new EditText(this);artist.setHint("Artista");artist.setSingleLine(true);artist.setText(x.optString("artist"));fields.addView(artist);EditText genre=new EditText(this);genre.setHint("Estilo musical (opcional)");genre.setSingleLine(true);genre.setText(x.optString("genre"));fields.addView(genre);new AlertDialog.Builder(this).setTitle("Dados da música").setView(fields).setNegativeButton("Cancelar",null).setPositiveButton("Salvar",(d,w)->{try{JSONObject all=metadata();JSONObject info=all.optJSONObject(url);if(info==null)info=new JSONObject();info.put("song",song.getText().toString().trim());info.put("artist",artist.getText().toString().trim());info.put("genre",genre.getText().toString().trim());all.put(url,info);prefs.edit().putString("metadata",all.toString()).apply();show();}catch(Exception e){Toast.makeText(this,"Erro ao salvar",Toast.LENGTH_SHORT).show();}}).show();}
+
+ void identifyOptions(String url){
+  String[] options={"Ouvir música com Audile (grátis)","Consultar créditos do TikTok","Preencher música e artista"};
+  new AlertDialog.Builder(this).setTitle("1 • Identificar música")
+   .setItems(options,(d,which)->{
+    if(which==0)launchAudile(url);
+    else if(which==1)identifySong(url,true);
+    else edit(url);
+   }).setNegativeButton("Voltar",null).show();
+ }
+ void postOptions(String url){
+  String[] options={"Preparar arte com ChatGPT","Gerar legenda do TikTok","Exportar arte PNG 9:16","Compartilhar dados da música"};
+  new AlertDialog.Builder(this).setTitle("3 • Preparar post")
+   .setItems(options,(d,which)->{
+    if(which==0)prepareArtwork(url);
+    else if(which==1)prepareCaption(url);
+    else if(which==2)beginExport(url);
+    else share(url);
+   }).setNegativeButton("Voltar",null).show();
+ }
  void open(String url){try{Intent external=new Intent(Intent.ACTION_VIEW,Uri.parse(url));external.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);startActivity(external);}catch(Exception e){Toast.makeText(this,"Não foi possível abrir o link",Toast.LENGTH_SHORT).show();}}
 
  boolean isTikTokShare(String shared){
@@ -387,8 +407,8 @@ public class MainActivity extends Activity {
  ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
  TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);TextView brandNote=label("●  MUSIC ANALYTICS  /  PRETO + LARANJA",11,Color.rgb(255,171,78),true);brandNote.setPadding(0,4,0,8);root.addView(brandNote);
  TextView kicker=label("BIBLIOTECA MUSICAL  •  TIKTOK",11,accent,true);kicker.setPadding(0,8,0,30);root.addView(kicker);
- Button workflows=action("◈ Criar automações • nós e conexões",true);workflows.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(workflows);
- Button scripts=action("⌘ Scripts de automação",false);scripts.setOnClickListener(v->startActivity(new Intent(this,ScriptActivity.class)));root.addView(scripts);
+ TextView intro=label("1. Escolha a música   2. Identifique   3. Prepare o post",13,muted,false);intro.setPadding(0,5,0,24);root.addView(intro);
+ Button workflows=action("◈ Automações por nós",false);workflows.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(workflows);
  JSONArray a=load(),history=resolved();
  TextView count=label("Fila de músicas",23,fg,true);root.addView(count);
  TextView sub=label(a.length()+" pendente(s)   •   "+history.length()+" resolvido(s)",13,muted,false);sub.setPadding(0,6,0,25);root.addView(sub);
@@ -408,25 +428,29 @@ public class MainActivity extends Activity {
   TextView status=label(note,11,"identified".equals(recognition)?accent:muted,true);
   status.setPadding(0,4,0,10);card.addView(status);
  }
+ String sound=x.optString("sound_hint","").trim();
+ if(!sound.isEmpty()&&!"identified".equals(recognition)){TextView hint=label("Som indicado no TikTok: "+sound,12,Color.rgb(255,171,78),false);hint.setPadding(0,4,0,12);card.addView(hint);}
  TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
  CheckBox choose=new CheckBox(this);choose.setText("Selecionar esta música");choose.setTextColor(fg);choose.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));choose.setChecked(isSelected(url));choose.setPadding(0,16,0,6);card.addView(choose);
  LinearLayout actions=new LinearLayout(this);actions.setOrientation(1);actions.setVisibility(isSelected(url)?View.VISIBLE:View.GONE);card.addView(actions);
  choose.setOnCheckedChangeListener((button,checked)->{prefs.edit().putBoolean("selected_"+url,checked).apply();actions.setVisibility(checked?View.VISIBLE:View.GONE);});
- Button edit=action("Editar música, artista e estilo",true);edit.setOnClickListener(v->edit(url));actions.addView(edit);
- Button open=action("Abrir no TikTok",false);open.setOnClickListener(v->open(url));actions.addView(open);
- Button inspect=action("Identificar música automaticamente",false);inspect.setOnClickListener(v->identifySong(url,true));actions.addView(inspect);
- Button audile=action("♫ Reconhecer áudio • Audile (grátis)",false);audile.setOnClickListener(v->launchAudile(url));actions.addView(audile);
-
- Button imageChoice=action("Imagem e logo • escolher / visualizar",true);imageChoice.setOnClickListener(v->imageOptions(url));actions.addView(imageChoice);
- Button exportArt=action("Exportar arte PNG • 1080 × 1920",false);exportArt.setOnClickListener(v->beginExport(url));actions.addView(exportArt);
- Button searchPin=action("Buscar arte no Pinterest",false);searchPin.setOnClickListener(v->pinterest(url));actions.addView(searchPin);
- Button artwork=action("Preparar arte com ChatGPT",false);artwork.setOnClickListener(v->prepareArtwork(url));actions.addView(artwork);
- Button captionBtn=action("Gerar legenda para TikTok",true);captionBtn.setOnClickListener(v->prepareCaption(url));actions.addView(captionBtn);
-
- Button share=action("Compartilhar / enviar para processamento",false);share.setOnClickListener(v->share(url));actions.addView(share);
- Button copy=action("Copiar link",false);copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));});actions.addView(copy);
+ Button identify=action("1 • Identificar música",true);identify.setOnClickListener(v->identifyOptions(url));actions.addView(identify);
+ Button image=action("2 • Escolher imagem e logo",false);image.setOnClickListener(v->imageOptions(url));actions.addView(image);
+ Button post=action("3 • Preparar post",true);post.setOnClickListener(v->postOptions(url));actions.addView(post);
+ LinearLayout extra=new LinearLayout(this);extra.setOrientation(1);extra.setVisibility(View.GONE);actions.addView(extra);
+ Button more=action("Mais ferramentas ▾",false);
+ more.setOnClickListener(v->{boolean visible=extra.getVisibility()==View.VISIBLE;extra.setVisibility(visible?View.GONE:View.VISIBLE);more.setText(visible?"Mais ferramentas ▾":"Ocultar ferramentas ▴");});
+ actions.addView(more);
+ Button edit=action("Editar música, artista e estilo",false);edit.setOnClickListener(v->edit(url));extra.addView(edit);
+ Button open=action("Abrir no TikTok",false);open.setOnClickListener(v->open(url));extra.addView(open);
+ Button inspect=action("Consultar créditos públicos",false);inspect.setOnClickListener(v->identifySong(url,true));extra.addView(inspect);
+ Button audile=action("Reconhecer áudio com Audile",false);audile.setOnClickListener(v->launchAudile(url));extra.addView(audile);
+ Button searchPin=action("Buscar imagem no Pinterest",false);searchPin.setOnClickListener(v->pinterest(url));extra.addView(searchPin);
+ Button copy=action("Copiar link",false);copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));});extra.addView(copy);
  CheckBox done=new CheckBox(this);done.setText("Resolvido");done.setTextColor(muted);done.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));done.setPadding(0,12,0,0);done.setOnCheckedChangeListener((button,checked)->{if(checked)markResolved(idx);});card.addView(done);
  }
+ TextView advanced=label("CONFIGURAÇÃO • OPCIONAL",11,accent,true);advanced.setPadding(0,24,0,8);root.addView(advanced);
+ Button scripts=action("Biblioteca de scripts • avançado",false);scripts.setOnClickListener(v->startActivity(new Intent(this,ScriptActivity.class)));root.addView(scripts);
  TextView historyTitle=label("Histórico de resolvidos",19,fg,true);historyTitle.setPadding(0,22,0,16);root.addView(historyTitle);
  for(int j=0;j<history.length();j++){String url=history.optString(j);JSONObject x=info(url);TextView item=label("✓  "+field(x,"song","Música não identificada")+" — "+field(x,"artist","Artista não identificado")+"\n"+url,12,muted,false);item.setPadding(20,18,20,18);item.setBackground(shape(panel,18,stroke));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,-2);hp.bottomMargin=10;root.addView(item,hp);}
  }
