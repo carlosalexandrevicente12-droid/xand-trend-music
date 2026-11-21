@@ -75,3 +75,46 @@ test("reconhece botao Enviar sem atributo type=submit", () => {
   assert.equal(isSendButton(button({ "data-tooltip": "Enviar" })), true);
   assert.equal(isSendButton(button({ "aria-label": "Fechar" })), false);
 });
+
+test("registra o pedido digitado antes de o editor ser esvaziado", () => {
+  let sent = null;
+  const editor = { innerText: "Link TikTok: https://www.tiktok.com/@teste/video/123" };
+  const context = {
+    document: {
+      addEventListener: () => {},
+      querySelector: (selector) => selector.includes("#prompt-textarea") ? editor : null,
+      querySelectorAll: () => []
+    },
+    chrome: {
+      runtime: {
+        onMessage: { addListener: () => {} },
+        sendMessage: (message) => { sent = message; return Promise.resolve(); }
+      }
+    },
+    location: { origin: "https://chatgpt.com", pathname: "/g/g-p-test/project" }
+  };
+  vm.createContext(context);
+  vm.runInContext(contentScript, context);
+  // Use the actual project ID instead of a generic project in the test.
+  context.location.pathname = "/g/g-p-6b0182d2a7a0819183158c736eb617ed/project";
+  vm.runInContext("notifySubmitted()", context);
+  assert.equal(sent.type, "XAND_SUBMITTED");
+  assert.equal(sent.userText, editor.innerText);
+});
+
+test("encontra ultimo pedido na regiao acessivel quando nao ha atributo de autoria", () => {
+  const context = {
+    document: {
+      addEventListener: () => {},
+      querySelectorAll: (selector) =>
+        selector.includes('[role="region"]')
+          ? [{ innerText: "TESTE XAND: mensagem pendente" }]
+          : []
+    },
+    chrome: { runtime: { onMessage: { addListener: () => {} } } },
+    location: { origin: "https://chatgpt.com", pathname: "/g/test/project" }
+  };
+  vm.createContext(context);
+  vm.runInContext(contentScript, context);
+  assert.equal(vm.runInContext("latestUserText()", context), "TESTE XAND: mensagem pendente");
+});
