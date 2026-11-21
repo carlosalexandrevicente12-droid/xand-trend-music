@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
     +"A arte precisa variar visualmente entre as músicas, sem repetir composição. "
     +"Use a atmosfera da faixa como inspiração, não capturas do TikTok. "
     +"Inclua título e artista legíveis. Use a logo XAND MUSIC original anexada COMPLETA, "
-    +"sem cortar, modificar ou redesenhar. Mantenha identidade preta e laranja. "
+    +"sem cortar, modificar ou redesenhar. Mantenha identidade preta e laranja e a logo completa na parte inferior, sem sobrepor título ou artista. "
     +"Gere a imagem nesta conversa do ChatGPT. Depois compartilhe o PNG gerado com o app XAND MUSIC "
     +"pela opção Compartilhar do Android para vincular a arte ao link. Link de referência: "+url;
   String logo=prefs.getString("logo_uri","");
@@ -623,7 +623,7 @@ void openPendingStepIfRequested(Intent incoming){
    for(int j=0;j<nodes.length();j++){
     JSONObject n=nodes.optJSONObject(j);if(n==null)continue;
     if("action_logo".equals(n.optString("type"))&&!item.has("logo_x_pct")){
-     String pos=n.optString("placement","rightTop");
+     String pos=n.optString("placement","centerBottom");
      item.put("logo_x_pct",pos.startsWith("center")?50:73);
      item.put("logo_y_pct",pos.endsWith("Bottom")?68:12);
      item.put("logo_width_pct",Math.max(15,Math.min(80,n.optInt("logo_width_pct",38))));
@@ -634,6 +634,9 @@ void openPendingStepIfRequested(Intent incoming){
      changed=true;
     }
    }
+   if(!item.has("tiktok_original_volume_pct")){item.put("tiktok_original_volume_pct",0);changed=true;}
+   if(!item.has("tiktok_added_volume_pct")){item.put("tiktok_added_volume_pct",100);changed=true;}
+   if(!item.has("tiktok_sound_check")){item.put("tiktok_sound_check","pending_inside_tiktok");changed=true;}
    if(changed){all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();}
   }catch(Exception ignored){}
  }
@@ -816,6 +819,14 @@ void openPendingStepIfRequested(Intent incoming){
    }
   }
  }
+ String chooseVisualStyle(String requested,long seed){
+   if(!"auto".equals(requested))return requested;
+   String[] available={"orbitas","ondas","prismas","grade"};
+   int choice=(int)((seed&Long.MAX_VALUE)%available.length);
+   String previous=prefs.getString("last_generated_style","");
+   if(previous.equals(available[choice]))choice=(choice+1)%available.length;
+   return available[choice];
+ }
  void continueCreativeAutomation(String url){
   if(!isQueuedLink(url))return;
   try{
@@ -871,9 +882,10 @@ void openPendingStepIfRequested(Intent incoming){
      prefs.edit().putBoolean("image_pending_"+url,true).apply();return;
     }
     if(!coversInProgress.add(url))return;
-    String artStyle=image.optString("art_style","auto");
+    String requestedStyle=image.optString("art_style","auto");
+     final String artStyle=chooseVisualStyle(requestedStyle,seed);
     final String title=song,performer=artist,genre=item.optString("genre","");
-    final int lx=item.optInt("logo_x_pct",73),ly=item.optInt("logo_y_pct",12),
+    final int lx=item.optInt("logo_x_pct",50),ly=item.optInt("logo_y_pct",68),
       lw=item.optInt("logo_width_pct",38);
     prefs.edit().putBoolean("image_generating_"+url,true).apply();
     new Thread(()->{
@@ -893,6 +905,8 @@ void openPendingStepIfRequested(Intent incoming){
         updated.put("generated_cover_uri",finished.toString());
         updated.put("generated_cover_source",chatSource?"generated_local_fallback":"generated_local");
         updated.put("generated_cover_style",artStyle);
+         updated.put("post_format_used","original_static_cover");
+         prefs.edit().putString("last_generated_style",artStyle).apply();
         if(chatSource)updated.put("generation_note","Capa local pronta. A arte do ChatGPT pode substituí-la.");
         updated.remove("generation_issue");
         prefs.edit().remove("image_pending_"+url).remove("logo_pending_"+url)
@@ -1067,6 +1081,10 @@ void openPendingStepIfRequested(Intent incoming){
    startActivity(Intent.createChooser(send,"Enviar arte e legenda"));
   }catch(Exception ex){Toast.makeText(this,"Falha ao compartilhar a arte.",Toast.LENGTH_LONG).show();}
  }
+ void openEditorFor(String url){
+   Intent intent=new Intent(this,EditorBridgeActivity.class);
+   intent.putExtra("music_url",url);startActivity(intent);
+ }
  void manageQueueItem(int idx){
   JSONArray items=load();if(idx<0||idx>=items.length())return;
   String url=items.optString(idx);
@@ -1078,6 +1096,7 @@ void openPendingStepIfRequested(Intent incoming){
   options.add("Mover uma posição para baixo");
   options.add("Remover da fila");
   options.add("Abrir link original");
+  options.add("Produzir no XAND MUSIC Editor");
   if(chatImageSelected()&&!cover)options.add("Executar script no ChatGPT Chat");
   if(cover){options.add("Visualizar arte criada");options.add("Compartilhar arte e legenda");}
   if(!item.optString("video_uri","").isEmpty())options.add("Compartilhar vídeo MP4 e legenda");
@@ -1090,6 +1109,7 @@ void openPendingStepIfRequested(Intent incoming){
     else if(w==1)moveInQueue(idx,1);
     else if(w==2)removeFromQueue(idx);
     else if(w==3)open(url);
+    else if("Produzir no XAND MUSIC Editor".equals(chosen))openEditorFor(url);
     else if("Executar script no ChatGPT Chat".equals(chosen))sendArtworkPromptToChatGPT(url,true);
     else if("Visualizar arte criada".equals(chosen))openGeneratedCover(url);
     else if("Compartilhar arte e legenda".equals(chosen))shareGeneratedCover(url);
@@ -1099,8 +1119,8 @@ void openPendingStepIfRequested(Intent incoming){
    }).setNegativeButton("Voltar",null).show();
  }
  void show(){
-  root=new LinearLayout(this);root.setOrientation(1);root.setPadding(34,44,34,44);root.setBackgroundColor(bg);
-  ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
+  root=new LinearLayout(this);root.setOrientation(1);root.setPadding(34,44,34,220);root.setBackgroundColor(bg);
+  ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(AutomationProgress.wrap(this,prefs,scroll));
   TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);
   TextView brandNote=label("●  MUSIC ANALYTICS  /  PRETO + LARANJA",11,Color.rgb(255,171,78),true);
   brandNote.setPadding(0,4,0,8);root.addView(brandNote);
@@ -1167,7 +1187,7 @@ void openPendingStepIfRequested(Intent incoming){
   settings.setPadding(0,24,0,10);root.addView(settings);
   Button flow=action("⚙  Editar fluxo de nós",false);
   flow.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(flow);
-  TextView note=label("Identificação, imagem, logo, duração e MP4 são processados pelo fluxo. O vídeo não contém áudio; selecione a música no TikTok. Publicação automática ainda requer integração.",12,muted,false);
+  TextView note=label("O fluxo prepara arte e MP4. Para usar o editor instalado, abra Gerenciar → Produzir no XAND MUSIC Editor. No TikTok: áudio original 0% e música adicionada 100% (verificação pendente). Não publica automaticamente.",12,muted,false);
   note.setPadding(5,6,5,18);root.addView(note);
   if(history.length()>0){
    TextView historyTitle=label("Histórico de resolvidos",18,fg,true);historyTitle.setPadding(0,18,0,12);root.addView(historyTitle);
