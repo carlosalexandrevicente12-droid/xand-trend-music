@@ -23,9 +23,22 @@ public class MainActivity extends Activity {
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
- @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
+ @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
+ void openPendingStepIfRequested(Intent incoming){
+  if(incoming==null)return;
+  String url=incoming.getStringExtra("xand_pending_url");
+  String stage=incoming.getStringExtra("xand_pending_stage");
+  if(url==null||stage==null)return;
+  boolean queued=false;JSONArray q=load();for(int i=0;i<q.length();i++)if(url.equals(q.optString(i)))queued=true;
+  incoming.removeExtra("xand_pending_url");incoming.removeExtra("xand_pending_stage");
+  if(!queued)return;
+  if("review".equals(stage))confirmReview(url);
+  else if("image".equals(stage))imageOptions(url);
+  else if("logo".equals(stage))logoPosition(url);
+  else if("duration".equals(stage))durationOptions(url);
+ }
 
  void selectImage(String url,boolean logo){
   pendingImageUrl=logo?"":url;pendingLogoUrl=logo?url:"";
@@ -90,9 +103,10 @@ public class MainActivity extends Activity {
    JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item==null)item=new JSONObject();
    item.put("image_uri",uri.toString());item.put("image_sha256",sha256);all.put(url,item);
    prefs.edit().putString("metadata",all.toString()).remove("image_pending_"+url).apply();
-   if(hasConnectedStep("action_image","action_logo")){
+   if(hasConnectedStep("action_image","action_logo")&&(!item.has("logo_x_pct")||!item.has("logo_width_pct"))){
     prefs.edit().putBoolean("logo_pending_"+url,true).apply();show();logoPosition(url);
-   }else{Toast.makeText(this,"Imagem vinculada à música.",Toast.LENGTH_SHORT).show();show();}
+   }else{prefs.edit().remove("logo_pending_"+url).remove("duration_pending_"+url).apply();
+    Toast.makeText(this,"Imagem registrada com as regras do fluxo.",Toast.LENGTH_SHORT).show();show();}
   }catch(Exception e){Toast.makeText(this,"Não foi possível registrar a imagem.",Toast.LENGTH_SHORT).show();}
  }
  void logoPosition(String url){
@@ -474,7 +488,7 @@ public class MainActivity extends Activity {
   if(hasImageAfterReview()&&info(url).optString("image_uri","").isEmpty()){
    prefs.edit().putBoolean("image_pending_"+url,true).apply();
    show();imageOptions(url);
-  }else if(hasConnectedStep("action_image","action_logo")){
+  }else if(hasConnectedStep("action_image","action_logo")&&!info(url).has("logo_x_pct")){
    prefs.edit().putBoolean("logo_pending_"+url,true).apply();show();logoPosition(url);
   }else{
    show();Toast.makeText(this,"Dados confirmados para esta música.",Toast.LENGTH_LONG).show();
@@ -492,6 +506,27 @@ public class MainActivity extends Activity {
    .setNegativeButton("Corrigir",(d,w)->edit(url))
    .setPositiveButton("Confirmar e continuar",(d,w)->completeReview(url)).show();
  }
+ void applyConfiguredVisualRules(String url,JSONArray nodes){
+  try{
+   JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item==null)item=new JSONObject();
+   boolean changed=false;
+   for(int j=0;j<nodes.length();j++){
+    JSONObject n=nodes.optJSONObject(j);if(n==null)continue;
+    if("action_logo".equals(n.optString("type"))&&!item.has("logo_x_pct")){
+     String pos=n.optString("placement","rightTop");
+     item.put("logo_x_pct",pos.startsWith("center")?50:73);
+     item.put("logo_y_pct",pos.endsWith("Bottom")?68:12);
+     item.put("logo_width_pct",Math.max(15,Math.min(80,n.optInt("logo_width_pct",38))));
+     changed=true;
+    }else if("action_duration".equals(n.optString("type"))&&!item.has("video_duration_seconds")){
+     item.put("video_duration_seconds",Math.max(5,Math.min(180,n.optInt("duration_sec",15))));
+     item.put("video_timing_mode","all_layers_full_duration");
+     changed=true;
+    }
+   }
+   if(changed){all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();}
+  }catch(Exception ignored){}
+ }
  boolean runShareFlows(String url){
   boolean identifiedByNode=false;
   try{
@@ -500,6 +535,7 @@ public class MainActivity extends Activity {
    for(int i=0;i<flows.length();i++){
     JSONObject flow=flows.optJSONObject(i);if(flow==null||!flow.optBoolean("enabled",false))continue;
     JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");if(nodes==null||edges==null)continue;
+    applyConfiguredVisualRules(url,nodes);
     java.util.HashMap<String,String> types=new java.util.HashMap<>();
     java.util.HashMap<String,String> assignedScripts=new java.util.HashMap<>();
     java.util.ArrayDeque<String> todo=new java.util.ArrayDeque<>();
@@ -522,12 +558,10 @@ public class MainActivity extends Activity {
       continue;
      }
      else if("action_logo".equals(type)){
-      prefs.edit().putBoolean("logo_pending_"+url,true).putBoolean("selected_"+url,true).apply();
-      Toast.makeText(this,"Posicione a logo no passo 2.",Toast.LENGTH_LONG).show();continue;
+      if(!info(url).has("logo_x_pct")){prefs.edit().putBoolean("logo_pending_"+url,true).apply();continue;}
      }
      else if("action_duration".equals(type)){
-      prefs.edit().putBoolean("duration_pending_"+url,true).putBoolean("selected_"+url,true).apply();
-      Toast.makeText(this,"Defina a duração no passo 3.",Toast.LENGTH_LONG).show();continue;
+      if(!info(url).has("video_duration_seconds")){prefs.edit().putBoolean("duration_pending_"+url,true).apply();continue;}
      }
      else if("action_copy".equals(type))((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));
      else if("action_open".equals(type))open(url);
@@ -601,61 +635,106 @@ public class MainActivity extends Activity {
  GradientDrawable shape(int color,int radius,int border){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);if(border!=0)d.setStroke(2,border);return d;}
  TextView label(String value,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
  Button action(String text,boolean primary){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(13);b.setTextColor(primary?bg:fg);b.setBackground(shape(primary?accent:Color.rgb(42,42,42),20,primary?0:stroke));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,104);lp.topMargin=10;b.setLayoutParams(lp);return b;}
+ void moveInQueue(int idx,int delta){
+  JSONArray before=load();int next=idx+delta;
+  if(idx<0||idx>=before.length()||next<0||next>=before.length())return;
+  JSONArray reordered=new JSONArray();
+  for(int k=0;k<before.length();k++)reordered.put(before.optString(k==idx?next:k==next?idx:k));
+  save(reordered);show();
+ }
+ void removeFromQueue(int idx){
+  JSONArray current=load();if(idx<0||idx>=current.length())return;
+  String url=current.optString(idx);
+  new AlertDialog.Builder(this).setTitle("Remover da fila?")
+   .setMessage("O link sairá da fila de produção. Os dados já registrados não serão apagados.")
+   .setNegativeButton("Cancelar",null).setPositiveButton("Remover",(d,w)->{
+    JSONArray next=new JSONArray();for(int k=0;k<current.length();k++)if(k!=idx)next.put(current.optString(k));
+    save(next);show();
+   }).show();
+ }
+ void manageQueueItem(int idx){
+  JSONArray items=load();if(idx<0||idx>=items.length())return;
+  String[] options={"Mover uma posição para cima","Mover uma posição para baixo","Remover da fila","Abrir link original"};
+  String url=items.optString(idx);
+  new AlertDialog.Builder(this).setTitle("Gerenciar link "+(idx+1))
+   .setItems(options,(d,w)->{
+    if(w==0)moveInQueue(idx,-1);
+    else if(w==1)moveInQueue(idx,1);
+    else if(w==2)removeFromQueue(idx);
+    else open(url);
+   }).setNegativeButton("Voltar",null).show();
+ }
  void show(){
- root=new LinearLayout(this);root.setOrientation(1);root.setPadding(34,44,34,44);root.setBackgroundColor(bg);
- ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
- TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);TextView brandNote=label("●  MUSIC ANALYTICS  /  PRETO + LARANJA",11,Color.rgb(255,171,78),true);brandNote.setPadding(0,4,0,8);root.addView(brandNote);
- TextView kicker=label("BIBLIOTECA MUSICAL  •  TIKTOK",11,accent,true);kicker.setPadding(0,8,0,30);root.addView(kicker);
- TextView intro=label("Selecione uma música da fila. Depois siga as três etapas em ordem. Cada botão explica o que faz.",13,muted,false);intro.setPadding(0,5,0,18);root.addView(intro);
- Button workflows=action("◈ Montar automação com nós",false);workflows.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(workflows);
- TextView flowHelp=label("Nós são etapas ligadas por linhas. Aqui você define o que acontece quando chega um link do TikTok.",12,muted,false);flowHelp.setPadding(8,3,8,24);root.addView(flowHelp);
- JSONArray a=load(),history=resolved();
- TextView count=label("Fila de músicas",23,fg,true);root.addView(count);
- TextView sub=label(a.length()+" pendente(s)   •   "+history.length()+" resolvido(s)",13,muted,false);sub.setPadding(0,6,0,25);root.addView(sub);
- if(a.length()==0){TextView empty=label("Nenhuma música pendente. Compartilhe um link do TikTok para adicionar.",14,muted,false);empty.setPadding(18,24,18,24);empty.setBackground(shape(panel,22,stroke));root.addView(empty);}
- for(int i=0;i<a.length();i++){
- final int idx=i;String url=a.optString(i);JSONObject x=info(url);
- LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(24,24,24,24);card.setBackground(shape(panel,26,stroke));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.bottomMargin=20;root.addView(card,cp);
- TextView number=label((i==0?"PRÓXIMA DA FILA  •  ":"FAIXA "+(i+1)+"  •  ")+"TIKTOK",11,accent,true);card.addView(number);
- TextView song=label(field(x,"song","Música não identificada"),19,fg,true);song.setPadding(0,12,0,3);card.addView(song);
- TextView artist=label(field(x,"artist","Artista não identificado"),14,muted,false);card.addView(artist);
- TextView genre=label("ESTILO  "+field(x,"genre","Não informado"),12,Color.rgb(255,171,78),false);genre.setPadding(0,12,0,10);card.addView(genre);
- if(x.has("video_duration_seconds")){int seconds=x.optInt("video_duration_seconds",15);TextView timing=label("VÍDEO  "+seconds+" segundos • todas as camadas sincronizadas",12,accent,false);timing.setPadding(0,4,0,10);card.addView(timing);}
- String recognition=x.optString("recognition_status","");
- if(!recognition.isEmpty()){
-  String note="identified".equals(recognition)?"✓  CRÉDITOS DO SOM IDENTIFICADOS":
-    "original".equals(recognition)?"ÁUDIO ORIGINAL • CONFIRMAR ARTISTA":
-    "partial".equals(recognition)?"SOM ENCONTRADO • VERIFICAR DADOS":"IDENTIFICAÇÃO PENDENTE";
-  TextView status=label(note,11,"identified".equals(recognition)?accent:muted,true);
-  status.setPadding(0,4,0,10);card.addView(status);
+  root=new LinearLayout(this);root.setOrientation(1);root.setPadding(34,44,34,44);root.setBackgroundColor(bg);
+  ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
+  TextView brand=label("XAND  MUSIC",26,fg,true);root.addView(brand);
+  TextView brandNote=label("●  MUSIC ANALYTICS  /  PRETO + LARANJA",11,Color.rgb(255,171,78),true);
+  brandNote.setPadding(0,4,0,8);root.addView(brandNote);
+  TextView heading=label("MINHA FILA DE MÚSICAS",23,fg,true);
+  heading.setPadding(0,18,0,6);root.addView(heading);
+  TextView intro=label("Compartilhe os links pelo TikTok. Aqui você só organiza a lista e acompanha o andamento.",14,muted,false);
+  intro.setPadding(0,0,0,20);root.addView(intro);
+  JSONArray a=load(),history=resolved();
+  TextView summary=label(a.length()+" na fila  •  "+history.length()+" concluída(s)",14,accent,true);
+  summary.setPadding(0,2,0,18);root.addView(summary);
+  if(a.length()==0){
+   TextView empty=label("Fila vazia. No TikTok, toque em Compartilhar → XAND MUSIC para adicionar uma música.",14,muted,false);
+   empty.setPadding(18,24,18,24);empty.setBackground(shape(panel,22,stroke));root.addView(empty);
+  }
+  for(int i=0;i<a.length();i++){
+   final int index=i;String url=a.optString(i);JSONObject item=info(url);
+   LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(22,18,22,18);
+   card.setBackground(shape(panel,24,stroke));
+   LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.bottomMargin=15;root.addView(card,cp);
+   TextView order=label(i==0?"01  •  PRÓXIMA MÚSICA":String.format(java.util.Locale.ROOT,"%02d  •  NA FILA",i+1),12,accent,true);
+   card.addView(order);
+   String title=item.optString("song","").trim(),artist=item.optString("artist","").trim();
+   TextView music=label(title.isEmpty()?"Música ainda não identificada":title,18,fg,true);
+   music.setPadding(0,10,0,2);card.addView(music);
+   TextView performer=label(artist.isEmpty()?"Artista pendente":artist,13,muted,false);card.addView(performer);
+   String genre=item.optString("genre","").trim();
+   if(!genre.isEmpty()){TextView g=label("Estilo: "+genre,12,muted,false);g.setPadding(0,4,0,0);card.addView(g);}
+   String state;
+   if(prefs.getBoolean("review_pending_"+url,false))state="Identificação aguardando confirmação";
+   else if(prefs.getBoolean("image_pending_"+url,false))state="Aguardando criação da imagem";
+   else if(prefs.getBoolean("logo_pending_"+url,false))state="Aguardando composição da arte";
+   else if(prefs.getBoolean("duration_pending_"+url,false))state="Aguardando renderização do vídeo";
+   else if("original".equals(item.optString("recognition_status","")))state="Som original • artista não confirmado";
+   else state="Aguardando processamento";
+   TextView status=label("●  "+state,12,accent,true);status.setPadding(0,10,0,6);card.addView(status);
+   TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
+   LinearLayout controls=new LinearLayout(this);controls.setOrientation(0);controls.setGravity(android.view.Gravity.CENTER_VERTICAL);
+   controls.setPadding(0,10,0,0);card.addView(controls);
+   CheckBox done=new CheckBox(this);done.setText("Resolvido");done.setTextColor(fg);
+   done.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));
+   controls.addView(done,new LinearLayout.LayoutParams(0,-2,1));
+   done.setOnCheckedChangeListener((button,checked)->{if(!checked)return;
+    new AlertDialog.Builder(this).setTitle("Confirmar conclusão")
+     .setMessage("Marque como resolvido somente depois de confirmar a publicação. O link ficará no histórico.")
+     .setNegativeButton("Cancelar",(d,w)->done.setChecked(false))
+     .setPositiveButton("Concluir",(d,w)->markResolved(index)).show();
+   });
+   Button manage=new Button(this);manage.setText("Gerenciar");manage.setAllCaps(false);
+   manage.setTextColor(fg);manage.setBackground(shape(Color.rgb(43,43,43),16,stroke));
+   controls.addView(manage,new LinearLayout.LayoutParams((int)(getResources().getDisplayMetrics().density*125),
+       (int)(getResources().getDisplayMetrics().density*44)));
+   manage.setOnClickListener(v->manageQueueItem(index));
+  }
+  TextView settings=label("CONFIGURAÇÃO DA AUTOMAÇÃO",11,accent,true);
+  settings.setPadding(0,24,0,10);root.addView(settings);
+  Button flow=action("⚙  Editar fluxo de nós",false);
+  flow.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(flow);
+  TextView note=label("Identificação, imagem, logo, duração e produção são configuradas no fluxo. A publicação automática ainda depende da integração com o TikTok.",12,muted,false);
+  note.setPadding(5,6,5,18);root.addView(note);
+  if(history.length()>0){
+   TextView historyTitle=label("Histórico de resolvidos",18,fg,true);historyTitle.setPadding(0,18,0,12);root.addView(historyTitle);
+   for(int j=0;j<history.length();j++){
+    String url=history.optString(j);JSONObject item=info(url);
+    TextView entry=label("✓  "+field(item,"song","Música não identificada")+" — "+field(item,"artist","Artista não identificado")+"\n"+url,12,muted,false);
+    entry.setPadding(18,15,18,15);entry.setBackground(shape(panel,16,stroke));
+    LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,-2);hp.bottomMargin=8;root.addView(entry,hp);
+   }
+  }
  }
- String sound=x.optString("sound_hint","").trim();
- if(!sound.isEmpty()&&!"identified".equals(recognition)){TextView hint=label("Som indicado no TikTok: "+sound,12,Color.rgb(255,171,78),false);hint.setPadding(0,4,0,12);card.addView(hint);}
- if(prefs.getBoolean("review_pending_"+url,false)){
-  TextView next=label("PRÓXIMO PASSO DO FLUXO: confirme música e artista na etapa 1.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
- }else if(prefs.getBoolean("image_pending_"+url,false)){
-  TextView next=label("PRÓXIMO PASSO DO FLUXO: escolha a imagem na etapa 2.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
- }else if(prefs.getBoolean("logo_pending_"+url,false)){
-  TextView next=label("PRÓXIMO PASSO DO FLUXO: posicione a logo na etapa 2.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
- }else if(prefs.getBoolean("duration_pending_"+url,false)){
-  TextView next=label("PRÓXIMO PASSO DO FLUXO: defina a duração na etapa 3.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
- }
- TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
- CheckBox choose=new CheckBox(this);choose.setText("Selecionar esta música");choose.setTextColor(fg);choose.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));choose.setChecked(isSelected(url));choose.setPadding(0,16,0,6);card.addView(choose);
- LinearLayout actions=new LinearLayout(this);actions.setOrientation(1);actions.setVisibility(isSelected(url)?View.VISIBLE:View.GONE);card.addView(actions);
- choose.setOnCheckedChangeListener((button,checked)->{prefs.edit().putBoolean("selected_"+url,checked).apply();actions.setVisibility(checked?View.VISIBLE:View.GONE);});
- Button identify=action("1 • Descobrir música e artista",true);identify.setOnClickListener(v->identifyOptions(url));actions.addView(identify);
- TextView identifyHelp=label("Reconheça o áudio, confira o título, o artista e o estilo.",12,muted,false);identifyHelp.setPadding(8,3,8,14);actions.addView(identifyHelp);
- Button image=action("2 • Escolher ou criar a capa",false);image.setOnClickListener(v->imageOptions(url));actions.addView(image);
- TextView imageHelp=label("Use uma foto, pesquise no Pinterest ou peça arte nova. A logo original é mantida inteira.",12,muted,false);imageHelp.setPadding(8,3,8,14);actions.addView(imageHelp);
- Button post=action("3 • Preparar a publicação",true);post.setOnClickListener(v->postOptions(url));actions.addView(post);
- TextView postHelp=label("Ajuste duração, prepare legenda e salve a capa. A publicação depende da sua confirmação.",12,muted,false);postHelp.setPadding(8,3,8,14);actions.addView(postHelp);
- CheckBox done=new CheckBox(this);done.setText("Resolvido");done.setTextColor(muted);done.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));done.setPadding(0,12,0,0);done.setOnCheckedChangeListener((button,checked)->{if(checked)markResolved(idx);});card.addView(done);
- }
- TextView advanced=label("OUTRAS CONFIGURAÇÕES",11,accent,true);advanced.setPadding(0,24,0,8);root.addView(advanced);
- Button scripts=action("Scripts • comandos de uma automação",false);scripts.setOnClickListener(v->startActivity(new Intent(this,ScriptActivity.class)));root.addView(scripts);
- TextView scriptHelp=label("Scripts são instruções que podem ser chamadas por um nó. Você não precisa mexer neles para receber links.",12,muted,false);scriptHelp.setPadding(8,3,8,14);root.addView(scriptHelp);
- TextView historyTitle=label("Histórico de resolvidos",19,fg,true);historyTitle.setPadding(0,22,0,16);root.addView(historyTitle);
- for(int j=0;j<history.length();j++){String url=history.optString(j);JSONObject x=info(url);TextView item=label("✓  "+field(x,"song","Música não identificada")+" — "+field(x,"artist","Artista não identificado")+"\n"+url,12,muted,false);item.setPadding(20,18,20,18);item.setBackground(shape(panel,18,stroke));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,-2);hp.bottomMargin=10;root.addView(item,hp);}
- }
+
 }
