@@ -27,7 +27,7 @@ public class WorkflowActivity extends Activity {
     editor.setWebChromeClient(new WebChromeClient());
     editor.addJavascriptInterface(new Bridge(),"Xand");
     editor.loadUrl("file:///android_asset/flows.html");
-    setContentView(editor);
+    setContentView(AutomationProgress.wrap(this,prefs,editor));
   }
   final class Bridge {
     @JavascriptInterface public String scripts(){return prefs.getString("scripts_v1","{\"version\":1,\"scripts\":[]}");}
