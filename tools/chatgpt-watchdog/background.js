@@ -140,7 +140,7 @@ async function tryHandoff(tabId) {
   } catch {
     return; // React app may not have mounted; next alarm retries.
   }
-  if (result?.submitted) await sessionRemove(key);
+  if (result?.submitted || result?.drafted) await sessionRemove(key);
 }
 
 async function checkPending(tabId, state, now) {
