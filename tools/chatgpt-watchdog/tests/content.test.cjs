@@ -184,3 +184,12 @@ test("preserva rascunho escrito pelo usuario e bloqueia envio", async () => {
   assert.equal(r.inserted, null);
   assert.equal(r.clicks, 0);
 });
+
+test("detecta aviso de resposta interrompida no ChatGPT", () => {
+  const text = "Conexão interrompida. Aguardando a resposta completa";
+  assert.equal(detected({ alerts: [element(text)] }), true);
+  assert.equal(detected({ leaves: [element(text)] }), true);
+  assert.equal(detected({
+    leaves: [element("O usuário relatou: " + text)]
+  }), false);
+});
