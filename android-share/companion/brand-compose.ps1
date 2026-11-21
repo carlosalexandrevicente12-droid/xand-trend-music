@@ -40,9 +40,10 @@ try {
   $header=[IO.File]::ReadAllBytes($logo)
   if(-not ($header[0] -eq 137 -and $header[1] -eq 80 -and $header[2] -eq 78 -and $header[3] -eq 71)) {throw 'Logo oficial não é um PNG válido.'}
 
-  # The source art must have a clean black branding region from y=1090 to the bottom.
-  # Image 1 is the genuine, unchanged logo raster, scaled proportionally to 840 px.
-  $filter='[0:v]scale=1080:1920,format=rgba[base];[1:v]scale=840:-1,format=rgba[mark];[base][mark]overlay=(W-w)/2:1140:format=auto[out]'
+  # The existing editor applies a dark band at y=1510..1755 even with blank text.
+  # Keep every white pixel of the genuine logo ABOVE that band, still in the lower part.
+  # The source art has an empty black branding region starting at y=1090.
+  $filter='[0:v]scale=1080:1920,format=rgba[base];[1:v]scale=680:-1,format=rgba[mark];[base][mark]overlay=(W-w)/2:1090:format=auto[out]'
   & $FfmpegExe -hide_banner -loglevel error -y -i $BaseImage -i $logo -filter_complex $filter -map '[out]' -frames:v 1 $cover
   if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $cover -PathType Leaf)) {throw 'Erro ao compor a capa.'}
   & $FfmpegExe -hide_banner -loglevel error -y -loop 1 -framerate 15 -i $cover -t $DurationSeconds -c:v libx264 -preset veryfast -crf 22 -pix_fmt yuv420p -movflags +faststart -an $video
