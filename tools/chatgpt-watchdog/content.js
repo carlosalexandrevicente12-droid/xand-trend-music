@@ -138,13 +138,27 @@ async function insertHandoff(text) {
     return { submitted: false, reason: "unexpected handoff" };
   }
 
-  // Idempotent: never append a second copy if a prior attempt left a draft.
-  if (!(editor.innerText || editor.textContent || "").includes(marker)) {
+  // A previous recovery may have left a stale draft at the project home.
+  // Replace only our own recovery draft; never overwrite an unrelated user draft.
+  const currentText = () => String(editor.innerText || editor.textContent || "");
+  const normalize = (value) => String(value).replace(/\\s+/g, " ").trim();
+  const existing = currentText();
+  if (existing.trim() && !existing.trim().startsWith(marker)) {
+    return { submitted: false, drafted: true, reason: "unrelated user draft preserved" };
+  }
+  if (normalize(existing) !== normalize(payload)) {
     editor.focus();
+    if (existing.trim()) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
     document.execCommand("insertText", false, payload);
   }
-  if (!(editor.innerText || editor.textContent || "").includes(marker)) {
-    return { submitted: false, reason: "composer insertion failed" };
+  if (normalize(currentText()) !== normalize(payload)) {
+    return { submitted: false, drafted: true, reason: "handoff draft differs from requested payload" };
   }
 
   // Let the editor update the enabled state of its submit button.
