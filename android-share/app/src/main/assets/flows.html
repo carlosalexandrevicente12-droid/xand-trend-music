@@ -20,7 +20,7 @@ aside{padding:15px;border-right:1px solid var(--stroke);background:#111}
 .stage{min-width:0;display:flex;flex-direction:column;background:#0b0b0b}.stagebar{padding:11px 15px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #303030}
 .stagebar label{font-weight:700}.stagebar small{color:#999}
 .viewport{overflow:auto;max-height:65vh;min-height:430px;touch-action:pan-x pan-y}
-.board{position:relative;width:1100px;height:820px;background-color:#0d0d0d;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:22px 22px}
+.board{position:relative;width:1100px;height:1000px;background-color:#0d0d0d;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:22px 22px}
 svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflow:visible}
 .node{position:absolute;width:205px;min-height:103px;border:1px solid #545454;border-radius:13px;background:#191919;box-shadow:0 8px 28px #0009;overflow:hidden}
 .node.trigger{border-color:#c97929}.node-header{background:#242424;color:#ffb566;padding:10px 12px;font-weight:900;display:flex;align-items:center;gap:6px;touch-action:none;cursor:grab;user-select:none}
@@ -34,7 +34,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </style></head>
 <body>
 <header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
-<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O fluxo gera arte original e legenda quando título e artista são confirmados pelo TikTok. Sem créditos confiáveis, aguarda sua confirmação. Pinterest e ChatGPT continuam como escolhas manuais; publicação automática ainda não está integrada.</p></div>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>Com créditos confirmados, cria a legenda e usa um script para enviar o pedido de imagem ao ChatGPT Chat. Compartilhe a imagem gerada de volta com XAND MUSIC. A troca com o ChatGPT exige ação na conversa; publicação automática ainda não está integrada.</p></div>
 <div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Completar fluxo de criação</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
 <div class="main">
 <aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
@@ -43,7 +43,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 <button data-type="action_notify"><b>◉ Aviso na tela</b><small>Confirma na tela que o link chegou</small></button>
 <button data-type="action_identify"><b>♫ Consultar música</b><small>Procura título e artista nos créditos públicos (pode ficar sem resposta)</small></button>
 <button data-type="action_review"><b>✓ Validar créditos</b><small>Segue sozinho com créditos confiáveis; senão, aguarda sua confirmação</small></button>
-<button data-type="action_image"><b>▧ Criar imagem</b><small>Arte local gratuita ou escolha manual de Pinterest/ChatGPT</small></button>
+<button data-type="action_image"><b>▧ Criar imagem</b><small>ChatGPT Chat por script, arte gráfica local ou escolha manual</small></button>
 <button data-type="action_logo"><b>◈ Posicionar logo</b><small>Arrastar e ajustar tamanho, mantendo a logo completa</small></button>
 <button data-type="action_duration"><b>◷ Definir duração</b><small>Uma duração para todas as camadas do vídeo</small></button>
 <button data-type="action_caption"><b>✎ Criar legenda</b><small>Nome, artista, estilo e pergunta para engajar</small></button>
@@ -52,7 +52,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
 <section class="stage" aria-label="Quadro de automação">
 <div class="stagebar"><strong style="color:#ffae57">SEU FLUXO DE NÓS</strong><small>Deslize o quadro para os lados para ver as próximas etapas.</small><button id="connect">Conectar nós</button><button id="removeConnections">Remover conexões</button><label class="tog"><input id="enabled" type="checkbox"> Ativa</label><small>O fluxo é executado ao compartilhar um link.</small></div>
-<div class="viewport"><div class="board" id="board"><svg id="wires" viewBox="0 0 1100 820" aria-hidden="true"></svg></div></div>
+<div class="viewport"><div class="board" id="board"><svg id="wires" viewBox="0 0 1100 1000" aria-hidden="true"></svg></div></div>
 <div class="bottom"><button id="pending" class="primary">Continuar etapa pendente</button><button id="test">Verificar fluxo</button><span class="status" id="status" role="status"></span></div>
 </section></div>
 <script>
@@ -64,7 +64,7 @@ const TYPES={
  action_notify:{name:'Aviso na tela',description:'Mostra confirmação',kind:'action'},
  action_identify:{name:'Consultar música',description:'Consulta créditos públicos sem inventar artista',kind:'action'},
  action_review:{name:'Validar créditos',description:'Segue com créditos confiáveis; solicita confirmação quando faltar informação',kind:'action'},
- action_image:{name:'Criar arte',description:'Produz arte original no aparelho ou deixa a escolha manual',kind:'action'},
+ action_image:{name:'Criar arte',description:'ChatGPT Chat via script ou arte gráfica local',kind:'action'},
  action_logo:{name:'Posicionar logo',description:'Arrastar e dimensionar logo sem cortes (decisão manual)',kind:'action'},
  action_duration:{name:'Definir duração',description:'Todas as camadas começam e terminam juntas',kind:'action'},
  action_caption:{name:'Criar legenda',description:'Monta uma legenda sem inventar créditos',kind:'action'},
@@ -103,9 +103,9 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
  if(n.type==='action_image'){
   const label=document.createElement('small');label.textContent='Origem da arte';body.append(label);
   const source=document.createElement('select');source.style.cssText='width:100%;font-size:11px';
-  [['generated_local','Gerar original no celular (grátis)'],['manual','Escolher manualmente / Pinterest / ChatGPT']].forEach(([v,t])=>{
+  [['chatgpt_chat','ChatGPT Chat por script'],['generated_local','Arte gráfica local (sem API)'],['manual','Pinterest / escolha manual']].forEach(([v,t])=>{
     let o=document.createElement('option');o.value=v;o.textContent=t;source.append(o)});
-  source.value=n.image_source||'generated_local';source.onclick=e=>e.stopPropagation();
+  source.value=n.image_source||'chatgpt_chat';source.onclick=e=>e.stopPropagation();
   body.append(source);
   const styleLabel=document.createElement('small');styleLabel.textContent='Variação visual';body.append(styleLabel);
   const style=document.createElement('select');style.style.cssText='width:100%;font-size:11px';
@@ -148,7 +148,7 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
  }
  el.append(head,body);
  el.onclick=()=>{if(!linking)return;if(!source){source=n.id;el.classList.add('selected');notify('Agora toque no nó de destino.')}else{if(source!==n.id&&!f.edges.some(e=>e.from===source&&e.to===n.id)){f.edges.push({from:source,to:n.id});notify('Conexão criada. Salve os fluxos.')}else notify('Conexão não adicionada.');linking=false;source=null;$('connect').textContent='Conectar nós';show()}};
- let x0,y0,originX,originY,dragging=false;head.addEventListener('pointerdown',ev=>{if(ev.target===remove||linking)return;dragging=true;x0=ev.clientX;y0=ev.clientY;originX=n.x;originY=n.y;head.setPointerCapture(ev.pointerId);ev.preventDefault()});head.addEventListener('pointermove',ev=>{if(!dragging)return;n.x=Math.max(10,Math.min(880,originX+ev.clientX-x0));n.y=Math.max(10,Math.min(520,originY+ev.clientY-y0));el.style.left=n.x+'px';el.style.top=n.y+'px';wires()});head.addEventListener('pointerup',()=>{if(dragging){dragging=false;notify('Posição atualizada. Salve os fluxos.')}});board.append(el)});
+ let x0,y0,originX,originY,dragging=false;head.addEventListener('pointerdown',ev=>{if(ev.target===remove||linking)return;dragging=true;x0=ev.clientX;y0=ev.clientY;originX=n.x;originY=n.y;head.setPointerCapture(ev.pointerId);ev.preventDefault()});head.addEventListener('pointermove',ev=>{if(!dragging)return;n.x=Math.max(10,Math.min(880,originX+ev.clientX-x0));n.y=Math.max(10,Math.min(780,originY+ev.clientY-y0));el.style.left=n.x+'px';el.style.top=n.y+'px';wires()});head.addEventListener('pointerup',()=>{if(dragging){dragging=false;notify('Posição atualizada. Salve os fluxos.')}});board.append(el)});
  wires();
 }
 function wires(){let f=current();let svg=$('wires');svg.replaceChildren();f.edges.forEach(edge=>{let a=f.nodes.find(x=>x.id===edge.from),b=f.nodes.find(x=>x.id===edge.to);if(!a||!b)return;let p=document.createElementNS('http://www.w3.org/2000/svg','path');let ax=a.x+205,ay=a.y+46,bx=b.x,by=b.y+46;let mid=(ax+bx)/2;p.setAttribute('d', 'M'+ax+' '+ay+' C'+mid+' '+ay+' '+mid+' '+by+' '+bx+' '+by);p.setAttribute('fill','none');p.setAttribute('stroke','#ff8500');p.setAttribute('stroke-width','3');svg.append(p);let c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',String(bx));c.setAttribute('cy',String(by));c.setAttribute('r','5');c.setAttribute('fill','#ff8500');svg.append(c)})}
@@ -165,6 +165,12 @@ function appendStages(f){
   if(!node){node={id:uid(),type,...positions[i]};f.nodes.push(node);}
   connectIfMissing(f,previous,node);previous=node;
  });
+ const chat=scriptsAvailable().find(s=>s.id==='xand_chatgpt_art_script_v1');
+ if(chat){
+  let script=f.nodes.find(n=>n.type==='action_script'&&n.scriptId===chat.id);
+  if(!script){script={id:uid(),type:'action_script',scriptId:chat.id,x:690,y:700};f.nodes.push(script);}
+  connectIfMissing(f,previous,script);
+ }
  f.enabled=true;
 }
 $('template').onclick=()=>{
