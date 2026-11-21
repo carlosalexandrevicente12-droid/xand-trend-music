@@ -34,7 +34,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </style></head>
 <body>
 <header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
-<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O modelo conecta oito etapas. Os créditos são consultados automaticamente. Posição da logo e duração são configuradas nestes nós. A confirmação de créditos e a imagem ainda exigem intervenção; a publicação automática não está integrada.</p></div>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O fluxo gera arte original e legenda quando título e artista são confirmados pelo TikTok. Sem créditos confiáveis, aguarda sua confirmação. Pinterest e ChatGPT continuam como escolhas manuais; publicação automática ainda não está integrada.</p></div>
 <div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Completar fluxo de criação</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
 <div class="main">
 <aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
@@ -42,10 +42,11 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 <button data-type="action_queue"><b>▤ Guardar na fila</b><small>Salva o link sem repetir. Não publica nada.</small></button>
 <button data-type="action_notify"><b>◉ Aviso na tela</b><small>Confirma na tela que o link chegou</small></button>
 <button data-type="action_identify"><b>♫ Consultar música</b><small>Procura título e artista nos créditos públicos (pode ficar sem resposta)</small></button>
-<button data-type="action_review"><b>✓ Confirmar dados</b><small>Pausa a automação até você confirmar música e artista</small></button>
-<button data-type="action_image"><b>▧ Escolher imagem</b><small>Após a confirmação, oferece celular, Pinterest ou ChatGPT</small></button>
+<button data-type="action_review"><b>✓ Validar créditos</b><small>Segue sozinho com créditos confiáveis; senão, aguarda sua confirmação</small></button>
+<button data-type="action_image"><b>▧ Criar imagem</b><small>Arte local gratuita ou escolha manual de Pinterest/ChatGPT</small></button>
 <button data-type="action_logo"><b>◈ Posicionar logo</b><small>Arrastar e ajustar tamanho, mantendo a logo completa</small></button>
 <button data-type="action_duration"><b>◷ Definir duração</b><small>Uma duração para todas as camadas do vídeo</small></button>
+<button data-type="action_caption"><b>✎ Criar legenda</b><small>Nome, artista, estilo e pergunta para engajar</small></button>
 <button data-type="action_copy"><b>⧉ Copiar link</b><small>Deixa o link pronto para colar em outro app</small></button>
 <button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o TikTok quando o link chega</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Roda comandos que você salvou em Scripts</small></button>
 </div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
@@ -62,10 +63,11 @@ const TYPES={
  action_queue:{name:'Guardar na fila',description:'Registra sem duplicar',kind:'action'},
  action_notify:{name:'Aviso na tela',description:'Mostra confirmação',kind:'action'},
  action_identify:{name:'Consultar música',description:'Consulta créditos públicos sem inventar artista',kind:'action'},
- action_review:{name:'Confirmar dados',description:'Pausa até a confirmação humana do título e artista',kind:'action'},
- action_image:{name:'Escolher capa',description:'Oferece imagem do celular, Pinterest ou ChatGPT',kind:'action'},
+ action_review:{name:'Validar créditos',description:'Segue com créditos confiáveis; solicita confirmação quando faltar informação',kind:'action'},
+ action_image:{name:'Criar arte',description:'Produz arte original no aparelho ou deixa a escolha manual',kind:'action'},
  action_logo:{name:'Posicionar logo',description:'Arrastar e dimensionar logo sem cortes (decisão manual)',kind:'action'},
  action_duration:{name:'Definir duração',description:'Todas as camadas começam e terminam juntas',kind:'action'},
+ action_caption:{name:'Criar legenda',description:'Monta uma legenda sem inventar créditos',kind:'action'},
  action_copy:{name:'Copiar link',description:'Copia para a área de transferência',kind:'action'},
  action_open:{name:'Abrir TikTok',description:'Abre o aplicativo TikTok',kind:'action'},
  action_script:{name:'Executar script',description:'Escolha um script salvo',kind:'action'}
@@ -89,6 +91,39 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
   let options=scriptsAvailable();let placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Selecione um script';select.append(placeholder);
   options.forEach(script=>{let option=document.createElement('option');option.value=script.id;option.textContent=script.name;select.append(option)});
   select.value=n.scriptId||'';select.onclick=e=>e.stopPropagation();select.onchange=e=>{n.scriptId=e.target.value;notify('Script atribuído. Salve o fluxo.')};body.append(select);
+ }
+ if(n.type==='action_review'){
+  const label=document.createElement('small');label.textContent='Quando continuar';body.append(label);
+  const mode=document.createElement('select');mode.style.cssText='width:100%;font-size:11px';
+  [['auto_verified','Automático se verificado'],['manual','Exigir confirmação sempre']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;mode.append(o)});
+  mode.value=n.review_mode||'auto_verified';mode.onclick=e=>e.stopPropagation();
+  mode.onchange=e=>{n.review_mode=mode.value;notify('Regra de créditos alterada. Salve o fluxo.')};body.append(mode);
+ }
+ if(n.type==='action_image'){
+  const label=document.createElement('small');label.textContent='Origem da arte';body.append(label);
+  const source=document.createElement('select');source.style.cssText='width:100%;font-size:11px';
+  [['generated_local','Gerar original no celular (grátis)'],['manual','Escolher manualmente / Pinterest / ChatGPT']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;source.append(o)});
+  source.value=n.image_source||'generated_local';source.onclick=e=>e.stopPropagation();
+  body.append(source);
+  const styleLabel=document.createElement('small');styleLabel.textContent='Variação visual';body.append(styleLabel);
+  const style=document.createElement('select');style.style.cssText='width:100%;font-size:11px';
+  [['auto','Variar automaticamente'],['orbitas','Órbitas luminosas'],['ondas','Ondas eletrônicas'],['prismas','Prismas geométricos'],['grade','Grade neon']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;style.append(o)});
+  style.value=n.art_style||'auto';style.onclick=e=>e.stopPropagation();
+  style.onchange=e=>{n.art_style=style.value;notify('Estilo alterado. Salve o fluxo.')};
+  body.append(style);
+  source.onchange=e=>{n.image_source=source.value;styleLabel.hidden=style.hidden=source.value!=='generated_local';notify('Origem da arte alterada. Salve o fluxo.')};
+  styleLabel.hidden=style.hidden=source.value!=='generated_local';
+ }
+ if(n.type==='action_caption'){
+  const label=document.createElement('small');label.textContent='Estilo da legenda';body.append(label);
+  const mode=document.createElement('select');mode.style.cssText='width:100%;font-size:11px';
+  [['engagement','Pergunta para engajar'],['info','Informativa'],['minimal','Minimalista']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;mode.append(o)});
+  mode.value=n.caption_mode||'engagement';mode.onclick=e=>e.stopPropagation();
+  mode.onchange=e=>{n.caption_mode=mode.value;notify('Legenda ajustada. Salve o fluxo.')};body.append(mode);
  }
  if(n.type==='action_logo'){
   const logoButton=document.createElement('button');logoButton.type='button';logoButton.textContent='Registrar logo oficial';logoButton.style.cssText='width:100%;margin:7px 0;font-size:11px';logoButton.onclick=e=>{e.stopPropagation();bridge?.selectLogo();};body.append(logoButton);
@@ -122,8 +157,8 @@ function connectIfMissing(f,from,to){
  if(from&&to&&!f.edges.some(e=>e.from===from.id&&e.to===to.id))f.edges.push({from:from.id,to:to.id});
 }
 function appendStages(f){
- const types=['action_identify','action_review','action_image','action_logo','action_duration'];
- const positions=[{x:690,y:295},{x:360,y:295},{x:30,y:295},{x:30,y:495},{x:360,y:495}];
+ const types=['action_identify','action_review','action_image','action_logo','action_duration','action_caption'];
+ const positions=[{x:690,y:295},{x:360,y:295},{x:30,y:295},{x:30,y:495},{x:360,y:495},{x:690,y:495}];
  let previous=f.nodes.find(n=>n.type==='action_notify')||f.nodes.find(n=>n.type==='action_queue');
  types.forEach((type,i)=>{
   let node=f.nodes.find(n=>n.type===type);
@@ -138,8 +173,8 @@ $('template').onclick=()=>{
  const existing=flows.findIndex(f=>names.includes(f.name));
  if(existing>=0){
   index=existing;const f=current();
-  if(['action_identify','action_review','action_image','action_logo','action_duration'].every(type=>f.nodes.some(n=>n.type===type))){show();notify('Oito etapas disponíveis. Edite os nós conforme sua preferência.');return}
-  if(!confirm('Adicionar posicionamento da logo e duração sincronizada ao fluxo? Os nós existentes serão mantidos.'))return;
+  if(['action_identify','action_review','action_image','action_logo','action_duration','action_caption'].every(type=>f.nodes.some(n=>n.type===type))){show();notify('Nove etapas disponíveis. Ajuste cada nó conforme sua preferência.');return}
+  if(!confirm('Adicionar a etapa de legenda ao fluxo? Os nós existentes serão mantidos.'))return;
   appendStages(f);f.name=name;show();persist();return;
  }
  if(flows.length>=20){notify('Limite de 20 automações.');return}
