@@ -21,7 +21,15 @@ function assistantNodes() {
 
 function latestUserText() {
   const nodes = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
-  return String(nodes.at(-1)?.innerText || nodes.at(-1)?.textContent || "").trim().slice(0, 900);
+  if (nodes.length) {
+    return String(nodes.at(-1)?.innerText || nodes.at(-1)?.textContent || "").trim().slice(0, 1400);
+  }
+  // ChatGPT may render the most recent user turn as an accessible labelled region.
+  const regions = Array.from(document.querySelectorAll(
+    '[role="region"][aria-label^="Você disse"], [role="region"][aria-label^="You said"]'
+  ));
+  return String(regions.at(-1)?.innerText || regions.at(-1)?.textContent || "")
+    .trim().slice(0, 1400);
 }
 
 function isGenerating() {
@@ -62,17 +70,24 @@ function probe() {
     signature: lastText.slice(-350),
     busy: isGenerating(),
     error: visibleError(),
-    lastUserText: latestUserText()
+    lastUserText: latestUserText(),
+    lastAssistantText: lastText.trim().slice(-650)
   };
 }
 
 function notifySubmitted() {
   if (!isProject()) return;
   const data = probe();
+  // Capture the actual composer text before ChatGPT clears it on submission.
+  // This stays in chrome.storage.session only and is never saved to disk.
+  const editor = promptComposer();
+  const userText = String(editor?.innerText || editor?.textContent || "").trim().slice(0, 1400);
   chrome.runtime.sendMessage({
     type: "XAND_SUBMITTED",
     assistantCount: data.assistantCount,
-    signature: data.signature
+    signature: data.signature,
+    userText,
+    previousAssistantText: data.lastAssistantText
   }).catch(() => {});
 }
 
