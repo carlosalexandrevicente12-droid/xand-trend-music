@@ -5,7 +5,7 @@
  * Requires Node 24+, ADB authorized on the Android device, and an authenticated
  * editor tab in Android Chrome. All media transfer is memory-only on the PC.
  *
- * Commands: inspect | prepare | upload | render | download
+ * Commands: inspect | prepare | upload | render | download | run
  * Options: --adb PATH --serial HOST:PORT --url http://192.168.0.6:1890/
  *          --source /sdcard/path/file.mp4 --force-render
  */
@@ -23,7 +23,7 @@ for (let i = 2; i < process.argv.length; i++) {
   if (!value || value.startsWith('--')) throw Error('Falta valor para ' + a);
   options[a.slice(2)] = value;
 }
-if (!['inspect', 'prepare', 'upload', 'render', 'download'].includes(command)) throw Error('Comando inválido: ' + command);
+if (!['inspect', 'prepare', 'upload', 'render', 'download', 'run'].includes(command)) throw Error('Comando inválido: ' + command);
 
 const adb = options.adb || process.env.XAND_ADB_PATH || 'adb';
 const serial = options.serial || process.env.XAND_ADB_SERIAL;
@@ -252,6 +252,17 @@ async function download(chrome) {
   return { downloaded: false, reason: 'download_pending', name };
 }
 
+async function waitForResult(chrome, maximumMs = 180000) {
+  const stopAt = Date.now() + maximumMs;
+  while (Date.now() < stopAt) {
+    const s = await state(chrome);
+    if (s.videoReady && s.download?.startsWith('/api/download/')) return { ready: true, status: s.status };
+    if (!s.processingJob && /erro|falh|cancelad/i.test(s.status || '')) throw Error('Exportação interrompida: ' + s.status);
+    await pause(5000);
+  }
+  return { ready: false, status: 'still_processing_or_waiting', action: 'inspect_then_download' };
+}
+
 async function main() {
   ad('get-state');
   // ADB-only loopback forwarding; not an internet endpoint.
@@ -277,6 +288,16 @@ async function main() {
     if (!target.url || !video) throw Error('Primeira música da fila ainda não possui vídeo local.');
     if (command === 'upload') { console.log(JSON.stringify(await upload(chrome, video), null, 2)); return; }
     if (command === 'prepare') { console.log(JSON.stringify(await prepare(chrome, target, video, {allowMissing:true}), null, 2)); return; }
+    if (command === 'run') {
+      const transfer = await upload(chrome, video);
+      const form = await prepare(chrome, target, video);
+      const submitted = await render(chrome, false);
+      const job = submitted.reason === 'previous_result_exists' ? {ready: true, reused: true} : await waitForResult(chrome);
+      const file = job.ready ? await download(chrome) : null;
+      console.log(JSON.stringify({link:target.url, transfer, form, render:submitted, job, file,
+        review:'logo_position_and_full_video_required', publication:'not_attempted'}, null, 2));
+      return;
+    }
     if (command === 'render') {
       const s = await state(chrome);
       if (!selectedFile(s, video.name)) throw Error('Execute upload antes do render.');
