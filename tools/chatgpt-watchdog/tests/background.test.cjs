@@ -20,6 +20,7 @@ function createHarness(url = projectChat, response = () => ({
   const tabs = new Map([[1, { id: 1, url }]]);
   const saved = new Map();
   const opened = [];
+  const handoffs = [];
   const events = {};
   const fakeChrome = {
     storage: {
@@ -60,7 +61,10 @@ function createHarness(url = projectChat, response = () => ({
       },
       async sendMessage(id, message) {
         if (message.type === "XAND_PROBE") return response();
-        if (message.type === "XAND_INSERT_HANDOFF") return handoffResult();
+        if (message.type === "XAND_INSERT_HANDOFF") {
+          handoffs.push(message.text);
+          return handoffResult();
+        }
         throw new Error("unexpected message");
       },
       onRemoved: { addListener() {} },
@@ -76,10 +80,10 @@ function createHarness(url = projectChat, response = () => ({
     for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
   };
   return {
-    events, saved, opened, tabs,
+    events, saved, opened, handoffs, tabs,
     setTime(t) { now = t; },
-    async submit() {
-      events.message({ type: "XAND_SUBMITTED", assistantCount: 0, signature: "" },
+    async submit(extra = {}) {
+      events.message({ type: "XAND_SUBMITTED", assistantCount: 0, signature: "", ...extra },
         { tab: tabs.get(1) }, () => {});
       await drain();
     },
@@ -156,4 +160,21 @@ test("unsent recovery draft is retried without opening another tab", async () =>
   await h.tick();
   assert.equal(handoffAttempts, 2);
   assert.equal(h.opened.length, 1);
+});
+
+test("transferencia inclui pedido pendente e resposta anterior", async () => {
+  const h = createHarness(projectChat, () => ({
+    assistantCount: 0, signature: "", busy: false, error: true, lastUserText: ""
+  }));
+  await h.submit({
+    userText: "Musica: https://www.tiktok.com/@xand/video/123. Criar capa.",
+    previousAssistantText: "Capa pronta; exportacao MP4 pendente."
+  });
+  h.setTime(46_000);
+  await h.tick();
+  assert.equal(h.opened.length, 1);
+  assert.equal(h.handoffs.length, 1);
+  assert.match(h.handoffs[0], /Musica: https:\/\/www\.tiktok\.com\/\@xand\/video\/123/);
+  assert.match(h.handoffs[0], /Capa pronta; exportacao MP4 pendente/);
+  assert.match(h.handoffs[0], /O monitor não confirma que a tarefa anterior falhou/);
 });
