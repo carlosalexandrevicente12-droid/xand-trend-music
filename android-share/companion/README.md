@@ -18,6 +18,7 @@ $env:XAND_ADB_PATH = 'C:\Users\Windows 11\Documents\Codex\Tools\platform-tools\a
 $env:XAND_ADB_SERIAL = '192.168.0.24:42357'
 node .\android-share\companion\editor-bridge.mjs inspect
 node .\android-share\companion\editor-bridge.mjs prepare
+node .\android-share\companion\editor-bridge.mjs run
 ```
 
 Comandos independentes:
@@ -29,8 +30,9 @@ Comandos independentes:
 | `prepare` | Define vídeo, formato 9:16, duração de 1–3 min e títulos vazios para manter arte integrada | Não renderiza |
 | `render` | Solicita exportação pelo editor | Recusa reexportar se existe trabalho ou resultado sem `--force-render` |
 | `download` | Baixa resultado para Downloads do Motorola e verifica presença | Não exclui originais |
+| `run` | Tenta enviar, preparar, exportar, aguardar até 3 minutos e baixar, em sequência | Reaproveita resultado existente; nunca publica |
 
-Se `prepare` indicar `source_not_uploaded`, usar `upload` e depois `prepare`. A exportação é **assíncrona**: consultar `inspect` até o editor confirmar vídeo pronto e então chamar `download`.
+O comando `run` reúne as etapas em uma chamada. Alternativamente, se `prepare` indicar `source_not_uploaded`, usar `upload` e depois `prepare`. A exportação é **assíncrona**: consultar `inspect` até o editor confirmar vídeo pronto e então chamar `download`. Quando o tempo de espera do `run` termina, a exportação continua no editor; não reenvie nem reexporte cegamente.
 
 **Conferência visual obrigatória:** o script não consegue comprovar por leitura de campos se a logo está na posição inferior; sinaliza `manual_required`. Não publicar até confirmar logo completa, sem duplicação, posicionada abaixo conforme a identidade XAND MUSIC. Quando a arte já inclui a marca, o script esvazia título e subtítulo para evitar camadas repetidas; não adiciona nova logo. A configuração de áudio original 0% / música 100% é exclusiva do TikTok e **não é aplicada pelo editor**.
 
