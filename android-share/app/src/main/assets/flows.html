@@ -28,21 +28,22 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 .node .remove{margin-left:auto;min-height:26px;padding:0 8px;border-radius:6px;font-size:16px;background:#351a1a;border-color:#5f2828;color:#ffc5c5}
 .node.selected{outline:3px solid #ff8500}.node.valid{border-color:var(--orange)}
 .node-number{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid #ad7134;border-radius:50%;font-size:10px}
-.bottom{padding:14px 17px;border-top:1px solid var(--stroke);display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.guide{margin:12px 17px;padding:12px 14px;background:#1d1a16;border:1px solid #70451e;border-radius:11px;font-size:12px;color:#ddd}.guide b{color:#ffae57}.guide p{margin:4px 0}.bottom{padding:14px 17px;border-top:1px solid var(--stroke);display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .status{font-size:12px;color:#ffbc77;min-height:18px}.tog{display:flex;align-items:center;gap:8px}.tog input{accent-color:#ff8500;width:18px;height:18px}
 @media(max-width:800px){.main{display:block}aside{border-right:0;border-bottom:1px solid var(--stroke)}.palette{grid-template-columns:1fr 1fr}.viewport{height:55vh;min-height:365px}.toolbar select{flex:1}.stagebar small{flex-basis:100%}}
 </style></head>
 <body>
 <header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>Toque em <b>Montar fluxo TikTok</b> para ver um exemplo pronto, já ligado e ativo. Depois você pode editar os nós.</p></div>
 <div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Montar fluxo TikTok</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
 <div class="main">
-<aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Dispara quando um link é compartilhado com o app</small></button></div>
+<aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
 <h2 class="smalltitle">AÇÕES</h2><div class="palette">
-<button data-type="action_queue"><b>▤ Guardar na fila</b><small>A fila permanece ativa por padrão</small></button>
-<button data-type="action_notify"><b>◉ Aviso na tela</b><small>Mostra confirmação ao receber o link</small></button>
-<button data-type="action_copy"><b>⧉ Copiar link</b><small>Copia o link recebido</small></button>
-<button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o link automaticamente</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Executa um script salvo na biblioteca</small></button>
-</div><div class="help"><p>1. Adicione os nós.</p><p>2. Clique em <b>Conectar nós</b> e toque na origem e no destino.</p><p>3. Ative e salve a automação.</p><p>Arraste os nós pelo cabeçalho para organizar o fluxo.</p></div></aside>
+<button data-type="action_queue"><b>▤ Guardar na fila</b><small>Salva o link sem repetir. Não publica nada.</small></button>
+<button data-type="action_notify"><b>◉ Aviso na tela</b><small>Confirma na tela que o link chegou</small></button>
+<button data-type="action_copy"><b>⧉ Copiar link</b><small>Deixa o link pronto para colar em outro app</small></button>
+<button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o TikTok quando o link chega</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Roda comandos que você salvou em Scripts</small></button>
+</div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
 <section class="stage" aria-label="Quadro de automação">
 <div class="stagebar"><button id="connect">Conectar nós</button><button id="removeConnections">Remover conexões</button><label class="tog"><input id="enabled" type="checkbox"> Ativa</label><small>O fluxo é executado ao compartilhar um link.</small></div>
 <div class="viewport"><div class="board" id="board"><svg id="wires" viewBox="0 0 1100 650" aria-hidden="true"></svg></div></div>
