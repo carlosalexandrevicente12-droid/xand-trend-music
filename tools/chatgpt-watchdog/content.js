@@ -34,11 +34,23 @@ function isGenerating() {
 }
 
 function visibleError() {
-  return Array.from(document.querySelectorAll('[role="alert"], [data-testid*="error-message"]'))
-    .filter((element) => element.getClientRects().length > 0)
-    .some((element) => /something went wrong|ocorreu um erro|houve um problema|network error|erro de rede/i.test(
-      element.textContent || ""
-    ));
+  const knownError = /something went wrong|ocorreu um erro|houve um problema|network error|erro de rede|sem resposta do chatgpt\\.?\\s*verifique sua conex[aã]o/i;
+  const alerts = Array.from(document.querySelectorAll(
+    '[role="alert"], [role="status"], [data-sonner-toast], [data-testid*="error-message"]'
+  ));
+  if (alerts.some((element) =>
+    element.getClientRects().length > 0 && knownError.test(element.textContent || "")
+  )) return true;
+
+  // Some ChatGPT connection failures appear as plain text, without an alert role.
+  // Match only the entire visible leaf to avoid treating a quoted past error as a live failure.
+  return Array.from(document.querySelectorAll("p, span, small, div")).some((element) =>
+    element.children.length === 0 &&
+    element.getClientRects().length > 0 &&
+    /^sem resposta do chatgpt\\.?\\s*verifique sua conex[aã]o\\.?$/i.test(
+      (element.textContent || "").trim()
+    )
+  );
 }
 
 function probe() {
