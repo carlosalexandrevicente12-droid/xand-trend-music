@@ -71,6 +71,9 @@ function promptComposer() {
 
 function isSendButton(button) {
   if (!button) return false;
+  // ChatGPT's current project composer uses an unlabeled submit button.
+  if (button.type === "submit" &&
+      button.closest("form")?.contains(promptComposer())) return true;
   const label = ((button.getAttribute("aria-label") || "") + " " +
     (button.getAttribute("data-testid") || "")).toLowerCase();
   return /(^|\s)(send|enviar)(\s|$|[-_])/.test(label) ||
@@ -108,8 +111,10 @@ function insertHandoff(text) {
     return { submitted: false, reason: "composer insertion failed" };
   }
 
-  const sendButton = Array.from(document.querySelectorAll("button"))
-    .find((button) => isSendButton(button) && !button.disabled);
+  const composerForm = editor.closest("form");
+  const sendButton = composerForm?.querySelector('button[type="submit"]:not([disabled])') ||
+    Array.from(document.querySelectorAll("button"))
+      .find((button) => isSendButton(button) && !button.disabled);
   if (sendButton) {
     sendButton.click();
     return { submitted: true };
