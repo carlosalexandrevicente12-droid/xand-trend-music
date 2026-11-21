@@ -15,6 +15,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
+import android.provider.MediaStore;
+import android.content.ContentUris;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
@@ -175,9 +177,23 @@ public final class EditorBridgeActivity extends Activity {
       long ms=Long.parseLong(durationText);
       if(ms<59000L||ms>182000L)throw new Exception("Duração fora de 1 a 3 minutos: "+(ms/1000)+" s.");
       boolean downloads=false;
-      try{String documentId=DocumentsContract.getDocumentId(file);
+      try{
+        String documentId=DocumentsContract.getDocumentId(file);
         downloads=documentId!=null&&(documentId.startsWith("primary:Download/")||
           ("com.android.providers.downloads.documents".equals(file.getAuthority())));
+        // Android's file picker often returns media.documents/video:ID for Downloads.
+        if(!downloads&&documentId!=null&&documentId.startsWith("video:")&&
+             "com.android.providers.media.documents".equals(file.getAuthority())){
+          long id=Long.parseLong(documentId.substring(6));
+          Uri media=ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,id);
+          try(Cursor location=getContentResolver().query(media,
+              new String[]{MediaStore.Video.Media.RELATIVE_PATH},null,null,null)){
+            if(location!=null&&location.moveToFirst()){
+              String relative=location.getString(0);
+              downloads=relative!=null&&relative.replace('\\','/').matches("(?i)^Download(s)?/.*");
+            }
+          }
+        }
       }catch(Exception ignored){}
       JSONObject all=new JSONObject(prefs.getString("metadata","{}"));
       JSONObject item=all.optJSONObject(musicUrl);if(item==null)item=new JSONObject();
@@ -185,6 +201,7 @@ public final class EditorBridgeActivity extends Activity {
       item.put("editor_video_duration_ms",ms);item.put("editor_video_size_bytes",bytes);
       item.put("editor_downloads_verified",downloads);
       item.put("editor_job_status","downloaded_verified");
+      item.put("editor_visual_review_status","pending");
       String chosen=style.getSelectedItemPosition()==1?"splitfade":"video";
       item.put("editor_completed_style",chosen);
       item.put("tiktok_original_volume_pct",0);
@@ -192,7 +209,7 @@ public final class EditorBridgeActivity extends Activity {
       item.put("tiktok_sound_check","pending_inside_tiktok");
       all.put(musicUrl,item);
       prefs.edit().putString("metadata",all.toString()).putString("editor_last_completed_style",chosen).apply();
-      status.setText("MP4 validado: "+filename+" · "+(ms/1000)+" s"
+      status.setText("MP4 validado: "+filename+" · "+(ms/1000)+" s · revisão visual pendente"
         +(downloads?" · Downloads confirmado":" · origem Downloads não comprovada"));
       new AlertDialog.Builder(this).setTitle("MP4 recebido")
         .setMessage("O vídeo foi verificado e associado à música da fila. A publicação não foi realizada. "+
