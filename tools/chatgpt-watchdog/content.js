@@ -86,9 +86,10 @@ function promptComposer() {
 
 function isSendButton(button) {
   if (!button) return false;
-  const label = ((button.getAttribute("aria-label") || "") + " " +
-    (button.getAttribute("data-testid") || "")).toLowerCase();
-  if (/(^|\\s)(send|enviar)(\\s|$|[-_])/.test(label) || /send-button/.test(label)) return true;
+  const label = [button.getAttribute("aria-label"), button.getAttribute("data-testid"),
+    button.getAttribute("title"), button.getAttribute("data-tooltip"), button.textContent]
+    .filter(Boolean).join(" ").toLowerCase();
+  if (/(^|\s)(send|enviar)(\s|$|[-_])/.test(label) || /send-button/.test(label)) return true;
   if (button.type !== "submit" || !promptComposer()) return false;
   const editorRect = promptComposer().getBoundingClientRect();
   const buttonRect = button.getBoundingClientRect();
