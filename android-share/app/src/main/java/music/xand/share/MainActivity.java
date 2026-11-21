@@ -24,10 +24,112 @@ public class MainActivity extends Activity {
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
- @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
- void openPendingStepIfRequested(Intent incoming){
+ @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){if(intent.getType()!=null&&intent.getType().startsWith("image/")){show();receiveSharedArtwork(intent);return;}String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
+ 
+ boolean chatImageSelected(){
+  try{
+   JSONArray flows=new JSONObject(prefs.getString("workflows_v1","{}")).optJSONArray("flows");
+   if(flows==null)return false;
+   for(int i=0;i<flows.length();i++){
+    JSONObject flow=flows.optJSONObject(i);
+    if(flow==null||!flow.optBoolean("enabled",false))continue;
+    JSONObject node=connectedNode(flow,"action_image");
+    if(node!=null&&"chatgpt_chat".equals(node.optString("image_source","chatgpt_chat")))return true;
+   }
+  }catch(Exception ignored){}
+  return false;
+ }
+ void sendArtworkPromptToChatGPT(String url,boolean repeat){
+  if(!isQueuedLink(url))return;
+  if(!repeat&&prefs.getBoolean("chatgpt_handoff_"+url,false))return;
+  JSONObject item=info(url);
+  String title=item.optString("song","").trim(),artist=item.optString("artist","").trim();
+  if(title.isEmpty()||artist.isEmpty()){confirmReview(url);return;}
+  String genre=item.optString("genre","").trim();
+  String prompt="Crie agora uma imagem ORIGINAL de capa para XAND MUSIC, vertical 9:16 (1080 × 1920). "
+    +"Música: "+title+". Artista: "+artist+". "
+    +(genre.isEmpty()?"Não invente o gênero da música. ":"Estilo musical confirmado: "+genre+". ")
+    +"A arte precisa variar visualmente entre as músicas, sem repetir composição. "
+    +"Use a atmosfera da faixa como inspiração, não capturas do TikTok. "
+    +"Inclua título e artista legíveis. Use a logo XAND MUSIC original anexada COMPLETA, "
+    +"sem cortar, modificar ou redesenhar. Mantenha identidade preta e laranja. "
+    +"Gere a imagem nesta conversa do ChatGPT. Depois compartilhe o PNG gerado com o app XAND MUSIC "
+    +"pela opção Compartilhar do Android para vincular a arte ao link. Link de referência: "+url;
+  String logo=prefs.getString("logo_uri","");
+  Intent send=new Intent(Intent.ACTION_SEND);
+  if(!logo.isEmpty()){
+   Uri uri=Uri.parse(logo);
+   send.setType("image/png");
+   send.putExtra(Intent.EXTRA_STREAM,uri);
+   send.setClipData(android.content.ClipData.newUri(getContentResolver(),"Logo oficial",uri));
+   send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  }else send.setType("text/plain");
+  send.putExtra(Intent.EXTRA_TEXT,prompt);
+  boolean handed=false;
+  try{
+   send.setPackage("com.openai.chatgpt");
+   startActivity(send);
+   handed=true;
+  }catch(Exception absent){
+   try{
+    send.setPackage(null);
+    startActivity(Intent.createChooser(send,"Enviar instruções ao ChatGPT Chat"));
+    handed=true;
+   }catch(Exception blocked){
+    Toast.makeText(this,"Instale ou abra o ChatGPT para criar a arte.",Toast.LENGTH_LONG).show();
+   }
+  }
+  if(handed)prefs.edit().putBoolean("chatgpt_handoff_"+url,true).apply();
+ }
+ void receiveSharedArtwork(Intent intent){
+  Uri shared=null;
+  try{shared=(Uri)intent.getParcelableExtra(Intent.EXTRA_STREAM);}catch(Exception ignored){}
+  if(shared==null){Toast.makeText(this,"Imagem não recebida. Compartilhe o arquivo PNG.",Toast.LENGTH_LONG).show();return;}
+  final Uri input=shared;
+  JSONArray queue=load();
+  java.util.ArrayList<String> urls=new java.util.ArrayList<>();
+  java.util.ArrayList<String> names=new java.util.ArrayList<>();
+  for(int i=0;i<queue.length();i++){
+   String url=queue.optString(i);
+   if(prefs.getBoolean("image_pending_"+url,false)||prefs.getBoolean("chatgpt_handoff_"+url,false)){
+    urls.add(url);
+    JSONObject item=info(url);
+    names.add(field(item,"song","Música "+(i+1))+" — "+field(item,"artist","Artista pendente"));
+   }
+  }
+  if(urls.isEmpty()){Toast.makeText(this,"Nenhuma música aguardando arte na fila.",Toast.LENGTH_LONG).show();return;}
+  if(urls.size()==1){importChatArtwork(urls.get(0),input);return;}
+  new AlertDialog.Builder(this).setTitle("Para qual música é esta imagem?")
+    .setItems(names.toArray(new String[0]),(d,which)->importChatArtwork(urls.get(which),input))
+    .setNegativeButton("Cancelar",null).show();
+ }
+ void importChatArtwork(String url,Uri source){
+  new Thread(()->{
+   Uri imported=null;String failure=null;
+   try{imported=CreativeAutomation.importSharedImage(this,source);}
+   catch(Exception ex){failure=ex.getMessage();}
+   final Uri image=imported;final String error=failure;
+   runOnUiThread(()->{
+    if(image==null){
+     Toast.makeText(this,error==null?"Erro ao importar imagem.":error,Toast.LENGTH_LONG).show();
+     return;
+    }
+    try{
+     JSONObject all=metadata(),item=all.optJSONObject(url);if(item==null)item=new JSONObject();
+     item.put("generated_cover_uri",image.toString());
+     item.put("generated_cover_source","chatgpt_chat");
+     item.remove("generation_issue");
+     all.put(url,item);
+     prefs.edit().putString("metadata",all.toString()).remove("image_pending_"+url)
+       .remove("logo_pending_"+url).remove("duration_pending_"+url).apply();
+     show();Toast.makeText(this,"Arte do ChatGPT vinculada à música.",Toast.LENGTH_LONG).show();
+    }catch(Exception ex){Toast.makeText(this,"Falha ao vincular arte.",Toast.LENGTH_LONG).show();}
+   });
+  }).start();
+ }
+void openPendingStepIfRequested(Intent incoming){
   if(incoming==null)return;
   String url=incoming.getStringExtra("xand_pending_url");
   String stage=incoming.getStringExtra("xand_pending_stage");
@@ -36,7 +138,7 @@ public class MainActivity extends Activity {
   incoming.removeExtra("xand_pending_url");incoming.removeExtra("xand_pending_stage");
   if(!queued)return;
   if("review".equals(stage))confirmReview(url);
-  else if("image".equals(stage))imageOptions(url);
+  else if("image".equals(stage)){if(chatImageSelected())sendArtworkPromptToChatGPT(url,true);else imageOptions(url);}
   else if("logo".equals(stage))logoPosition(url);
   else if("duration".equals(stage))durationOptions(url);
  }
@@ -563,7 +665,7 @@ public class MainActivity extends Activity {
     JSONObject flow=flows.optJSONObject(i);
     if(flow==null||!flow.optBoolean("enabled",false))continue;
     JSONObject node=connectedNode(flow,"action_image");
-    if(node!=null&&"generated_local".equals(node.optString("image_source","generated_local")))return true;
+    if(node!=null&&("generated_local".equals(node.optString("image_source","chatgpt_chat"))||"chatgpt_chat".equals(node.optString("image_source","chatgpt_chat"))))return true;
    }
   }catch(Exception ignored){}
   return false;
@@ -571,6 +673,26 @@ public class MainActivity extends Activity {
  boolean isQueuedLink(String url){
   JSONArray items=load();for(int i=0;i<items.length();i++)if(url.equals(items.optString(i)))return true;
   return false;
+ }
+ void invokeChatArtScript(String url,JSONObject flow){
+  if(prefs.getBoolean("chatgpt_handoff_"+url,false))return;
+  JSONObject caption=connectedNode(flow,"action_caption");
+  if(caption==null)return;
+  JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");
+  if(nodes==null||edges==null)return;
+  for(int i=0;i<nodes.length();i++){
+   JSONObject node=nodes.optJSONObject(i);
+   if(node==null||!"action_script".equals(node.optString("type"))||
+      !"xand_chatgpt_art_script_v1".equals(node.optString("scriptId")))continue;
+   for(int e=0;e<edges.length();e++){
+    JSONObject edge=edges.optJSONObject(e);
+    if(edge!=null&&caption.optString("id").equals(edge.optString("from"))&&
+       node.optString("id").equals(edge.optString("to"))){
+     ScriptExecutor.run(this,prefs,node.optString("scriptId"),url);
+     return;
+    }
+   }
+  }
  }
  void continueCreativeAutomation(String url){
   if(!isQueuedLink(url))return;
@@ -605,7 +727,17 @@ public class MainActivity extends Activity {
     }
     all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
     if(image==null)return;
-    if(!"generated_local".equals(image.optString("image_source","generated_local")))return;
+    String source=image.optString("image_source","chatgpt_chat");
+    if("chatgpt_chat".equals(source)){
+     if(item.optString("generated_cover_uri","").isEmpty()){
+      item.put("generation_issue","Aguardando a imagem criada no ChatGPT Chat.");
+      all.put(url,item);prefs.edit().putString("metadata",all.toString())
+        .putBoolean("image_pending_"+url,true).apply();
+      invokeChatArtScript(url,flow);
+     }else prefs.edit().remove("image_pending_"+url).apply();
+     return;
+    }
+    if(!"generated_local".equals(source))return;
     if(!item.optString("generated_cover_uri","").isEmpty()||
        !item.optString("image_uri","").isEmpty()){
      prefs.edit().remove("image_pending_"+url).remove("image_generating_"+url).apply();
@@ -824,17 +956,20 @@ public class MainActivity extends Activity {
   options.add("Mover uma posição para baixo");
   options.add("Remover da fila");
   options.add("Abrir link original");
+  if(chatImageSelected()&&!cover)options.add("Executar script no ChatGPT Chat");
   if(cover){options.add("Visualizar arte criada");options.add("Compartilhar arte e legenda");}
   if(legend)options.add("Copiar legenda");
   new AlertDialog.Builder(this).setTitle("Gerenciar link "+(idx+1))
    .setItems(options.toArray(new String[0]),(d,w)->{
+    String chosen=options.get(w);
     if(w==0)moveInQueue(idx,-1);
     else if(w==1)moveInQueue(idx,1);
     else if(w==2)removeFromQueue(idx);
     else if(w==3)open(url);
-    else if(cover&&w==4)openGeneratedCover(url);
-    else if(cover&&w==5)shareGeneratedCover(url);
-    else copyText("Legenda XAND",caption(url));
+    else if("Executar script no ChatGPT Chat".equals(chosen))sendArtworkPromptToChatGPT(url,true);
+    else if("Visualizar arte criada".equals(chosen))openGeneratedCover(url);
+    else if("Compartilhar arte e legenda".equals(chosen))shareGeneratedCover(url);
+    else if("Copiar legenda".equals(chosen))copyText("Legenda XAND",caption(url));
    }).setNegativeButton("Voltar",null).show();
  }
  void show(){
@@ -869,6 +1004,7 @@ public class MainActivity extends Activity {
    if(!genre.isEmpty()){TextView g=label("Estilo: "+genre,12,muted,false);g.setPadding(0,4,0,0);card.addView(g);}
    String state;
    if(prefs.getBoolean("image_generating_"+url,false))state="Gerando arte original no celular";
+   else if(prefs.getBoolean("chatgpt_handoff_"+url,false)&&item.optString("generated_cover_uri","").isEmpty())state="Aguardando imagem do ChatGPT Chat";
    else if(!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Arte e legenda prontas";
    else if(!item.optString("generated_cover_uri","").isEmpty())state="Arte pronta";
    else if(!item.optString("caption_auto","").isEmpty()&&!item.optString("generation_issue","").isEmpty())state="Legenda pronta • confira a logo no fluxo";
