@@ -302,19 +302,19 @@ void openPendingStepIfRequested(Intent incoming){
 
  void durationOptions(String url){
   JSONObject item=info(url);
-  int initial=Math.max(5,Math.min(180,item.optInt("video_duration_seconds",15)));
+  int initial=Math.max(60,Math.min(180,item.optInt("video_duration_seconds",60)));
   LinearLayout body=new LinearLayout(this);body.setOrientation(1);body.setPadding(32,18,32,18);
   TextView value=label("Duração: "+initial+" segundos",18,accent,true);body.addView(value);
   TextView guide=label("Uma duração única controla todas as camadas. Imagem, logo, título, artista, estilo e efeitos permanecem de 00:00 até o final.",13,fg,false);
   guide.setPadding(0,12,0,14);body.addView(guide);
-  SeekBar duration=new SeekBar(this);duration.setMax(175);duration.setProgress(initial-5);body.addView(duration);
+  SeekBar duration=new SeekBar(this);duration.setMax(120);duration.setProgress(initial-60);body.addView(duration);
   TextView timeline=label("Todas as camadas: 00:00 → "+String.format(java.util.Locale.ROOT,"%02d:%02d",initial/60,initial%60),13,fg,true);
   timeline.setPadding(0,12,0,12);body.addView(timeline);
   TextView note=label("Esta etapa salva a linha do tempo. Exportar um vídeo MP4 com áudio será uma funcionalidade posterior; o PNG continua disponível.",12,muted,false);body.addView(note);
   final int[] seconds={initial};
   duration.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
    public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
-    seconds[0]=5+progress;value.setText("Duração: "+seconds[0]+" segundos");
+    seconds[0]=60+progress;value.setText("Duração: "+seconds[0]+" segundos");
     timeline.setText("Todas as camadas: 00:00 → "+String.format(java.util.Locale.ROOT,"%02d:%02d",seconds[0]/60,seconds[0]%60));
    }
    public void onStartTrackingTouch(SeekBar bar){}
@@ -623,7 +623,7 @@ void openPendingStepIfRequested(Intent incoming){
      item.put("logo_width_pct",Math.max(15,Math.min(80,n.optInt("logo_width_pct",38))));
      changed=true;
     }else if("action_duration".equals(n.optString("type"))&&!item.has("video_duration_seconds")){
-     item.put("video_duration_seconds",Math.max(5,Math.min(180,n.optInt("duration_sec",15))));
+     item.put("video_duration_seconds",Math.max(60,Math.min(180,n.optInt("duration_sec",60))));
      item.put("video_timing_mode","all_layers_full_duration");
      changed=true;
     }
