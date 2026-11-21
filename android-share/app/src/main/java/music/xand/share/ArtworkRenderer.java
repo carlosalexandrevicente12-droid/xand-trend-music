@@ -211,4 +211,110 @@ public final class ArtworkRenderer {
     canvas.drawBitmap(logo,src,fitted,paint);
   }
 
+
+  /** Creates a branded, original geometric background locally: no remote image or API. */
+  private static void drawOriginalBackdrop(Canvas canvas,long seed,String desiredStyle){
+    java.util.Random rng=new java.util.Random(seed);
+    int style;
+    if("orbitas".equals(desiredStyle))style=0;
+    else if("ondas".equals(desiredStyle))style=1;
+    else if("prismas".equals(desiredStyle))style=2;
+    else if("grade".equals(desiredStyle))style=3;
+    else style=(int)Math.floorMod(seed,4L);
+    int tint=Color.rgb(255,105+rng.nextInt(65),rng.nextInt(28));
+    Paint base=new Paint(Paint.ANTI_ALIAS_FLAG);
+    base.setShader(new LinearGradient(120,0,970,HEIGHT,
+      new int[]{Color.rgb(5,5,9),Color.rgb(30,12,14),Color.rgb(4,4,7)},
+      new float[]{0f,.48f,1f},Shader.TileMode.CLAMP));
+    canvas.drawRect(0,0,WIDTH,HEIGHT,base);
+    Paint shape=new Paint(Paint.ANTI_ALIAS_FLAG);
+    if(style==0){
+      float cx=350+rng.nextInt(420),cy=590+rng.nextInt(260);
+      shape.setStyle(Paint.Style.STROKE);
+      for(int i=0;i<18;i++){
+        float radius=96+i*(30+rng.nextInt(6));
+        shape.setStrokeWidth(2+(i%3)*2);
+        shape.setColor(Color.argb(42+i%5*17,255,125+i%4*21,32));
+        canvas.drawCircle(cx,cy,radius,shape);
+      }
+      shape.setStyle(Paint.Style.FILL);
+      shape.setColor(Color.argb(120,255,128,0));
+      canvas.drawCircle(cx,cy,95,shape);
+      for(int i=0;i<70;i++){
+        shape.setColor(Color.argb(45+rng.nextInt(100),255,143,30));
+        canvas.drawCircle(rng.nextInt(WIDTH),rng.nextInt(1400),1+rng.nextInt(5),shape);
+      }
+    }else if(style==1){
+      shape.setStyle(Paint.Style.STROKE);
+      for(int w=0;w<32;w++){
+        android.graphics.Path path=new android.graphics.Path();
+        float offset=w*24f,phase=rng.nextFloat()*6.28f;
+        for(int x=-80;x<WIDTH+80;x+=18){
+          float y=230+offset+(float)Math.sin(x/145f+phase+w*.26f)*(70+w*1.4f);
+          if(x==-80)path.moveTo(x,y);else path.lineTo(x,y);
+        }
+        shape.setColor(Color.argb(36+(w%5)*14,255,110+(w*4)%100,20));
+        shape.setStrokeWidth(2+(w%4));canvas.drawPath(path,shape);
+      }
+    }else if(style==2){
+      for(int i=0;i<55;i++){
+        float x=rng.nextInt(WIDTH),y=rng.nextInt(1450);
+        float size=60+rng.nextInt(310);
+        android.graphics.Path tri=new android.graphics.Path();
+        tri.moveTo(x,y);tri.lineTo(x+size*.72f,y+size*.35f);
+        tri.lineTo(x-size*.31f,y+size);tri.close();
+        shape.setStyle(i%3==0?Paint.Style.STROKE:Paint.Style.FILL);
+        shape.setStrokeWidth(3);
+        shape.setColor(Color.argb(i%3==0?130:22+rng.nextInt(52),255,105+rng.nextInt(90),0));
+        canvas.drawPath(tri,shape);
+      }
+    }else{
+      shape.setStyle(Paint.Style.STROKE);
+      for(int i=-22;i<50;i++){
+        int x=i*64;
+        shape.setColor(Color.argb(36+(Math.abs(i)%4)*16,255,130,10));
+        shape.setStrokeWidth(i%4==0?4:2);
+        canvas.drawLine(x,-100,x+560,1600,shape);
+        canvas.drawLine(-100,i*64,1200,i*64+350,shape);
+      }
+      shape.setStyle(Paint.Style.FILL);
+      for(int i=0;i<9;i++){
+        shape.setColor(Color.argb(35+rng.nextInt(70),255,130+rng.nextInt(70),0));
+        float x=rng.nextInt(WIDTH),y=rng.nextInt(1300);
+        canvas.drawRoundRect(new RectF(x,y,x+30+rng.nextInt(170),y+12+rng.nextInt(90)),8,8,shape);
+      }
+    }
+    shape.setStyle(Paint.Style.FILL);
+    shape.setShader(new LinearGradient(0,0,0,HEIGHT,
+      new int[]{Color.argb(20,0,0,0),Color.TRANSPARENT,Color.argb(200,0,0,0)},
+      null,Shader.TileMode.CLAMP));
+    canvas.drawRect(0,0,WIDTH,HEIGHT,shape);
+  }
+
+  /** Generates a finished 9:16 cover using the complete official logo. */
+  public static void exportGenerated(Context context,Uri logoUri,String title,String artist,
+      String genre,String style,long seed,int logoXPercent,int logoYPercent,int logoWidthPercent,
+      OutputStream stream) throws IOException {
+    if(title==null||title.trim().isEmpty()||artist==null||artist.trim().isEmpty())
+      throw new IOException("Créditos da música não confirmados.");
+    if(logoUri==null)throw new IOException("Registre a logo original para gerar uma capa.");
+    Bitmap bitmap=null,logo=null;
+    try{
+      logo=decodeImage(context,logoUri);
+      bitmap=Bitmap.createBitmap(WIDTH,HEIGHT,Bitmap.Config.ARGB_8888);
+      Canvas canvas=new Canvas(bitmap);
+      drawOriginalBackdrop(canvas,seed,style);
+      drawFooter(canvas,title.trim(),artist.trim(),genre==null?"":genre.trim());
+      drawLogo(canvas,logo,"Superior direita",logoXPercent,logoYPercent,logoWidthPercent);
+      if(!bitmap.compress(Bitmap.CompressFormat.PNG,100,stream))
+        throw new IOException("Não foi possível gerar a arte PNG.");
+      stream.flush();
+    }catch(OutOfMemoryError oom){
+      throw new IOException("Memória insuficiente para gerar a arte.",oom);
+    }finally{
+      if(logo!=null)logo.recycle();
+      if(bitmap!=null)bitmap.recycle();
+    }
+  }
+
 }
