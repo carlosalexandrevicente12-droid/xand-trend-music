@@ -1,9 +1,12 @@
 "use strict";
 
 // No screenshots, remote network requests, cookies, or persistent message storage.
-const PROJECT_PREFIX = "/g/g-p-6b0182d2a7a0819183158c736eb617ed/";
-const isProject = () => location.origin === "https://chatgpt.com" &&
-  location.pathname.startsWith(PROJECT_PREFIX);
+const PROJECT_ID = "g-p-6b0182d2a7a0819183158c736eb617ed";
+const isProject = () => {
+  const projectSegment = location.pathname.split("/")[2] || "";
+  return location.origin === "https://chatgpt.com" &&
+    (projectSegment === PROJECT_ID || projectSegment.startsWith(PROJECT_ID + "-"));
+};
 
 function assistantNodes() {
   const direct = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
