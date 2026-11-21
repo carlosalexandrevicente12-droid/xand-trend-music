@@ -15,20 +15,20 @@ import java.util.regex.*;
 
 public class MainActivity extends Activity {
  SharedPreferences prefs; LinearLayout root;
- String pendingImageUrl="",pendingExportUrl="";
+ String pendingImageUrl="",pendingExportUrl="",pendingLogoUrl="";
  boolean shareIntentHandled=false;
  void clearConsumedShareIntent(){Intent safe=new Intent(this,MainActivity.class);safe.setAction(Intent.ACTION_MAIN);safe.addCategory(Intent.CATEGORY_LAUNCHER);setIntent(safe);}
  JSONArray load(){try{return new JSONArray(prefs.getString("queue","[]"));}catch(Exception e){return new JSONArray();}}
  void save(JSONArray a){prefs.edit().putString("queue",a.toString()).apply();}
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
- void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).apply();show();}
+ void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
- @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
+ @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
 
  void selectImage(String url,boolean logo){
-  pendingImageUrl=logo?"":url;
+  pendingImageUrl=logo?"":url;pendingLogoUrl=logo?url:"";
   Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
   pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("image/*");
   pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -46,7 +46,10 @@ public class MainActivity extends Activity {
   try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException ignored){}
   if(requestCode==81){
    prefs.edit().putString("logo_uri",uri.toString()).apply();
-   Toast.makeText(this,"Logotipo registrado sem alterações.",Toast.LENGTH_LONG).show();show();return;
+   String target=pendingLogoUrl;pendingLogoUrl="";
+   Toast.makeText(this,"Logotipo registrado sem alterações.",Toast.LENGTH_LONG).show();show();
+   if(!target.isEmpty()&&prefs.getBoolean("logo_pending_"+target,false))logoPosition(target);
+   return;
   }
   final String url=pendingImageUrl;pendingImageUrl="";
   if(url.isEmpty())return;
@@ -86,27 +89,143 @@ public class MainActivity extends Activity {
   try{
    JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item==null)item=new JSONObject();
    item.put("image_uri",uri.toString());item.put("image_sha256",sha256);all.put(url,item);
-   prefs.edit().putString("metadata",all.toString()).putBoolean("image_pending_"+url,false).apply();
-   Toast.makeText(this,"Imagem vinculada à música.",Toast.LENGTH_SHORT).show();show();
+   prefs.edit().putString("metadata",all.toString()).remove("image_pending_"+url).apply();
+   if(hasConnectedStep("action_image","action_logo")){
+    prefs.edit().putBoolean("logo_pending_"+url,true).apply();show();logoPosition(url);
+   }else{Toast.makeText(this,"Imagem vinculada à música.",Toast.LENGTH_SHORT).show();show();}
   }catch(Exception e){Toast.makeText(this,"Não foi possível registrar a imagem.",Toast.LENGTH_SHORT).show();}
  }
- void logoPosition(){
-  String[] positions={"Superior direita","Superior centro","Inferior direita","Inferior centro"};
-  int selected=java.util.Arrays.asList(positions).indexOf(prefs.getString("logo_position","Superior direita"));
-  new AlertDialog.Builder(this).setTitle("Posição da logo").setSingleChoiceItems(positions,Math.max(0,selected),(d,which)->{
-   prefs.edit().putString("logo_position",positions[which]).apply();d.dismiss();
-   Toast.makeText(this,"Posição salva.",Toast.LENGTH_SHORT).show();
-  }).setNegativeButton("Cancelar",null).show();
+ void logoPosition(String url){
+  String logoUri=prefs.getString("logo_uri","");
+  if(logoUri.isEmpty()){
+   new AlertDialog.Builder(this).setTitle("Logo original necessária")
+    .setMessage("Selecione primeiro o arquivo oficial XAND MUSIC. Ele será preservado por inteiro.")
+    .setNegativeButton("Voltar",null).setPositiveButton("Selecionar logo",(d,w)->selectImage(url,true)).show();
+   return;
+  }
+  final android.graphics.Bitmap logoBitmap;
+  try{logoBitmap=ArtworkRenderer.loadLogoPreview(this,Uri.parse(logoUri));}
+  catch(Exception e){new AlertDialog.Builder(this).setTitle("Logo indisponível")
+   .setMessage("Escolha novamente o arquivo original para ajustar a posição.")
+   .setPositiveButton("Selecionar logo",(d,w)->selectImage(url,true)).setNegativeButton("Voltar",null).show();return;}
+  JSONObject item=info(url);
+  String legacy=prefs.getString("logo_position","Superior direita");
+  int defaultX=legacy.endsWith("centro")?50:73;
+  int defaultY=legacy.startsWith("Superior")?10:58;
+  final int[] state={item.optInt("logo_x_pct",defaultX),item.optInt("logo_y_pct",defaultY),
+      item.optInt("logo_width_pct",38)};
+  final int width=(int)(getResources().getDisplayMetrics().widthPixels*.63f);
+  final int height=width*16/9;
+  FrameLayout preview=new FrameLayout(this);
+  preview.setBackgroundColor(Color.rgb(24,24,24));
+  ImageView background=new ImageView(this);
+  background.setScaleType(ImageView.ScaleType.FIT_CENTER);
+  String image=item.optString("image_uri","");
+  if(!image.isEmpty())try{background.setImageURI(Uri.parse(image));}catch(Exception ignored){}
+  preview.addView(background,new FrameLayout.LayoutParams(width,height));
+  ImageView logoView=new ImageView(this);
+  logoView.setImageBitmap(logoBitmap);
+  logoView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+  preview.addView(logoView,new FrameLayout.LayoutParams(1,1));
+  TextView guidance=label("Arraste a logo sobre a prévia. Ajuste o tamanho sem cortar a imagem original.",12,muted,false);
+  final Runnable place=()->{
+   float targetWidth=width*Math.max(15,Math.min(80,state[2]))/100f;
+   float scale=Math.min(targetWidth/logoBitmap.getWidth(),height*.48f/logoBitmap.getHeight());
+   int w=Math.max(1,Math.round(logoBitmap.getWidth()*scale));
+   int h=Math.max(1,Math.round(logoBitmap.getHeight()*scale));
+   FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(w,h);
+   logoView.setLayoutParams(lp);
+   float left=Math.max(0,Math.min(width-w,width*state[0]/100f-w/2f));
+   float top=Math.max(0,Math.min(height-h,height*state[1]/100f-h/2f));
+   logoView.setX(left);logoView.setY(top);
+  };
+  final float[] start={0,0,0,0};
+  logoView.setOnTouchListener((view,event)->{
+   switch(event.getActionMasked()){
+    case android.view.MotionEvent.ACTION_DOWN:
+     view.getParent().requestDisallowInterceptTouchEvent(true);
+     start[0]=event.getRawX();start[1]=event.getRawY();start[2]=view.getX();start[3]=view.getY();return true;
+    case android.view.MotionEvent.ACTION_MOVE:
+    case android.view.MotionEvent.ACTION_UP:
+     float nx=Math.max(0,Math.min(width-view.getWidth(),start[2]+event.getRawX()-start[0]));
+     float ny=Math.max(0,Math.min(height-view.getHeight(),start[3]+event.getRawY()-start[1]));
+     view.setX(nx);view.setY(ny);
+     state[0]=Math.round((nx+view.getWidth()/2f)*100f/width);
+     state[1]=Math.round((ny+view.getHeight()/2f)*100f/height);return true;
+   }
+   return false;
+  });
+  SeekBar size=new SeekBar(this);
+  size.setMax(65);size.setProgress(Math.max(0,Math.min(65,state[2]-15)));
+  TextView sizeLabel=label("Tamanho da logo: "+state[2]+"% da largura",12,fg,true);
+  size.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+   public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){state[2]=15+progress;sizeLabel.setText("Tamanho da logo: "+state[2]+"% da largura");place.run();}
+   public void onStartTrackingTouch(SeekBar bar){}
+   public void onStopTrackingTouch(SeekBar bar){}
+  });
+  LinearLayout contents=new LinearLayout(this);contents.setOrientation(1);contents.setPadding(20,12,20,12);
+  contents.addView(guidance);contents.addView(preview,new LinearLayout.LayoutParams(width,height));
+  contents.addView(sizeLabel);contents.addView(size);
+  ScrollView scroll=new ScrollView(this);scroll.addView(contents);
+  new AlertDialog.Builder(this).setTitle("Posicionar logo • XAND")
+   .setView(scroll).setNegativeButton("Cancelar",null)
+   .setPositiveButton("Salvar posição",(d,w)->{
+    try{
+     JSONObject all=metadata();JSONObject updated=all.optJSONObject(url);if(updated==null)updated=new JSONObject();
+     updated.put("logo_x_pct",state[0]);updated.put("logo_y_pct",state[1]);updated.put("logo_width_pct",state[2]);
+     all.put(url,updated);
+     prefs.edit().putString("metadata",all.toString()).remove("logo_pending_"+url).apply();
+     show();
+     if(hasConnectedStep("action_logo","action_duration"))durationOptions(url);
+     else Toast.makeText(this,"Posição da logo salva para esta música.",Toast.LENGTH_LONG).show();
+    }catch(Exception e){Toast.makeText(this,"Erro ao salvar posição.",Toast.LENGTH_LONG).show();}
+   }).show();
+  preview.post(place);
  }
+
+ void durationOptions(String url){
+  JSONObject item=info(url);
+  int initial=Math.max(5,Math.min(180,item.optInt("video_duration_seconds",15)));
+  LinearLayout body=new LinearLayout(this);body.setOrientation(1);body.setPadding(32,18,32,18);
+  TextView value=label("Duração: "+initial+" segundos",18,accent,true);body.addView(value);
+  TextView guide=label("Uma duração única controla todas as camadas. Imagem, logo, título, artista, estilo e efeitos permanecem de 00:00 até o final.",13,fg,false);
+  guide.setPadding(0,12,0,14);body.addView(guide);
+  SeekBar duration=new SeekBar(this);duration.setMax(175);duration.setProgress(initial-5);body.addView(duration);
+  TextView timeline=label("Todas as camadas: 00:00 → "+String.format(java.util.Locale.ROOT,"%02d:%02d",initial/60,initial%60),13,fg,true);
+  timeline.setPadding(0,12,0,12);body.addView(timeline);
+  TextView note=label("Esta etapa salva a linha do tempo. Exportar um vídeo MP4 com áudio será uma funcionalidade posterior; o PNG continua disponível.",12,muted,false);body.addView(note);
+  final int[] seconds={initial};
+  duration.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+   public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
+    seconds[0]=5+progress;value.setText("Duração: "+seconds[0]+" segundos");
+    timeline.setText("Todas as camadas: 00:00 → "+String.format(java.util.Locale.ROOT,"%02d:%02d",seconds[0]/60,seconds[0]%60));
+   }
+   public void onStartTrackingTouch(SeekBar bar){}
+   public void onStopTrackingTouch(SeekBar bar){}
+  });
+  new AlertDialog.Builder(this).setTitle("Duração do vídeo • camadas sincronizadas")
+   .setView(body).setNegativeButton("Cancelar",null)
+   .setPositiveButton("Salvar duração",(d,w)->{
+    try{
+     JSONObject all=metadata();JSONObject updated=all.optJSONObject(url);if(updated==null)updated=new JSONObject();
+     updated.put("video_duration_seconds",seconds[0]);
+     updated.put("video_timing_mode","all_layers_full_duration");
+     all.put(url,updated);
+     prefs.edit().putString("metadata",all.toString()).remove("duration_pending_"+url).apply();
+     show();Toast.makeText(this,"Todas as camadas ajustadas para "+seconds[0]+" segundos.",Toast.LENGTH_LONG).show();
+    }catch(Exception e){Toast.makeText(this,"Não foi possível salvar duração.",Toast.LENGTH_LONG).show();}
+   }).show();
+ }
+
  void imageOptions(String url){
-  String[] choices={"Usar imagem do celular como fundo","Selecionar logo original XAND sem recortar","Pesquisar imagens no Pinterest","Pedir imagem inédita ao ChatGPT","Definir onde a logo aparece","Visualizar a capa antes de salvar","Salvar capa PNG 1080 × 1920","Retirar a imagem escolhida"};
+  String[] choices={"Usar imagem do celular como fundo","Selecionar logo original XAND sem recortar","Pesquisar imagens no Pinterest","Pedir imagem inédita ao ChatGPT","Arrastar e ajustar tamanho da logo","Visualizar a capa antes de salvar","Salvar capa PNG 1080 × 1920","Retirar a imagem escolhida"};
   new AlertDialog.Builder(this).setTitle("Imagens e arte • XAND MUSIC").setItems(choices,(d,w)->{
    switch(w){
     case 0:selectImage(url,false);break;
     case 1:selectImage(url,true);break;
     case 2:pinterest(url);break;
     case 3:prepareArtwork(url);break;
-    case 4:logoPosition();break;
+    case 4:logoPosition(url);break;
     case 5:previewArt(url);break;
     case 6:beginExport(url);break;
     case 7:try{JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item!=null){item.remove("image_uri");item.remove("image_sha256");all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();show();}}catch(Exception ignored){}break;
@@ -155,7 +274,8 @@ public class MainActivity extends Activity {
     if(background.isEmpty()||logo.isEmpty())throw new java.io.IOException("Selecione imagem e logo antes de exportar.");
     try(java.io.OutputStream output=getContentResolver().openOutputStream(destination,"w")){
      if(output==null)throw new java.io.IOException("Não foi possível gravar no destino escolhido.");
-     ArtworkRenderer.export(this,Uri.parse(background),Uri.parse(logo),title,artist,genre,position,output);
+     ArtworkRenderer.export(this,Uri.parse(background),Uri.parse(logo),title,artist,genre,position,
+      item.optInt("logo_x_pct",-1),item.optInt("logo_y_pct",-1),item.optInt("logo_width_pct",-1),output);
     }
    }catch(Exception e){error=e.getMessage()==null?"Falha ao exportar a arte.":e.getMessage();}
    String failure=error;
@@ -197,12 +317,26 @@ public class MainActivity extends Activity {
   String logo=prefs.getString("logo_uri","");
   if(!logo.isEmpty()){
    ImageView logoView=new ImageView(this);logoView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-   try{logoView.setImageBitmap(ArtworkRenderer.loadLogoPreview(this,Uri.parse(logo)));}catch(Exception ex){Toast.makeText(this,"Não foi possível ler a logo original.",Toast.LENGTH_SHORT).show();}
-   String pos=prefs.getString("logo_position","Superior direita");
-   int gravity=(pos.startsWith("Superior")?android.view.Gravity.TOP:android.view.Gravity.BOTTOM)|
-     (pos.endsWith("centro")?android.view.Gravity.CENTER_HORIZONTAL:android.view.Gravity.RIGHT);
-   FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams((int)(width*.36f),(int)(width*.22f),gravity);
-   lp.setMargins(14,14,14,14);frame.addView(logoView,lp);
+   try{
+    android.graphics.Bitmap bitmap=ArtworkRenderer.loadLogoPreview(this,Uri.parse(logo));
+    logoView.setImageBitmap(bitmap);
+    if(item.has("logo_x_pct")&&item.has("logo_y_pct")&&item.has("logo_width_pct")){
+     int pct=Math.max(15,Math.min(80,item.optInt("logo_width_pct",38)));
+     float scale=Math.min(width*pct/100f/bitmap.getWidth(),height*.48f/bitmap.getHeight());
+     int w=Math.max(1,Math.round(bitmap.getWidth()*scale)),h=Math.max(1,Math.round(bitmap.getHeight()*scale));
+     FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(w,h,android.view.Gravity.TOP|android.view.Gravity.LEFT);
+     frame.addView(logoView,lp);
+     float cx=width*item.optInt("logo_x_pct",73)/100f,cy=height*item.optInt("logo_y_pct",10)/100f;
+     logoView.setX(Math.max(0,Math.min(width-w,cx-w/2f)));
+     logoView.setY(Math.max(0,Math.min(height-h,cy-h/2f)));
+    }else{
+     String pos=prefs.getString("logo_position","Superior direita");
+     int gravity=(pos.startsWith("Superior")?android.view.Gravity.TOP:android.view.Gravity.BOTTOM)|
+       (pos.endsWith("centro")?android.view.Gravity.CENTER_HORIZONTAL:android.view.Gravity.RIGHT);
+     FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams((int)(width*.36f),(int)(width*.22f),gravity);
+     lp.setMargins(14,14,14,14);frame.addView(logoView,lp);
+    }
+   }catch(Exception ex){Toast.makeText(this,"Não foi possível ler a logo original.",Toast.LENGTH_SHORT).show();}
   }
   TextView names=label(field(item,"song","Nome da música não informado")+"\n"+field(item,"artist","Artista não informado")+"\n"+field(item,"genre","Estilo não informado"),14,fg,true);
   names.setBackgroundColor(Color.argb(195,0,0,0));names.setPadding(20,14,20,14);
@@ -234,13 +368,14 @@ public class MainActivity extends Activity {
    }).setNegativeButton("Voltar",null).show();
  }
  void postOptions(String url){
-  String[] options={"Pedir uma arte original ao ChatGPT","Criar e revisar a legenda do TikTok","Salvar capa pronta em PNG 9:16","Enviar dados para outro aplicativo","Copiar o link da música"};
+  String[] options={"Definir duração e sincronizar camadas","Pedir uma arte original ao ChatGPT","Criar e revisar a legenda do TikTok","Salvar capa pronta em PNG 9:16","Enviar dados para outro aplicativo","Copiar o link da música"};
   new AlertDialog.Builder(this).setTitle("3 • Preparar post")
    .setItems(options,(d,which)->{
-    if(which==0)prepareArtwork(url);
-    else if(which==1)prepareCaption(url);
-    else if(which==2)beginExport(url);
-    else if(which==3)share(url);
+    if(which==0)durationOptions(url);
+    else if(which==1)prepareArtwork(url);
+    else if(which==2)prepareCaption(url);
+    else if(which==3)beginExport(url);
+    else if(which==4)share(url);
     else copyText("Link da música",url);
    }).setNegativeButton("Voltar",null).show();
  }
@@ -317,7 +452,7 @@ public class MainActivity extends Activity {
  
  
  
- boolean hasImageAfterReview(){
+ boolean hasConnectedStep(String sourceType,String targetType){
   try{
    JSONArray flows=new JSONObject(prefs.getString("workflows_v1","{}")).optJSONArray("flows");if(flows==null)return false;
    for(int i=0;i<flows.length();i++){
@@ -325,17 +460,22 @@ public class MainActivity extends Activity {
     JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");if(nodes==null||edges==null)continue;
     java.util.HashMap<String,String> types=new java.util.HashMap<>();
     for(int n=0;n<nodes.length();n++){JSONObject node=nodes.optJSONObject(n);if(node!=null)types.put(node.optString("id"),node.optString("type"));}
-    for(int e=0;e<edges.length();e++){JSONObject edge=edges.optJSONObject(e);if(edge!=null&&"action_review".equals(types.get(edge.optString("from")))&&"action_image".equals(types.get(edge.optString("to"))))return true;}
+    for(int e=0;e<edges.length();e++){JSONObject edge=edges.optJSONObject(e);
+     if(edge!=null&&sourceType.equals(types.get(edge.optString("from")))&&targetType.equals(types.get(edge.optString("to"))))return true;
+    }
    }
   }catch(Exception ignored){}
   return false;
  }
+ boolean hasImageAfterReview(){return hasConnectedStep("action_review","action_image");}
  void completeReview(String url){
   if(needsMetadata(url))return;
   prefs.edit().remove("review_pending_"+url).apply();
   if(hasImageAfterReview()&&info(url).optString("image_uri","").isEmpty()){
    prefs.edit().putBoolean("image_pending_"+url,true).apply();
    show();imageOptions(url);
+  }else if(hasConnectedStep("action_image","action_logo")){
+   prefs.edit().putBoolean("logo_pending_"+url,true).apply();show();logoPosition(url);
   }else{
    show();Toast.makeText(this,"Dados confirmados para esta música.",Toast.LENGTH_LONG).show();
   }
@@ -380,6 +520,14 @@ public class MainActivity extends Activity {
       prefs.edit().putBoolean("image_pending_"+url,true).putBoolean("selected_"+url,true).apply();
       Toast.makeText(this,"Escolha a imagem e a logo no passo 2.",Toast.LENGTH_LONG).show();
       continue;
+     }
+     else if("action_logo".equals(type)){
+      prefs.edit().putBoolean("logo_pending_"+url,true).putBoolean("selected_"+url,true).apply();
+      Toast.makeText(this,"Posicione a logo no passo 2.",Toast.LENGTH_LONG).show();continue;
+     }
+     else if("action_duration".equals(type)){
+      prefs.edit().putBoolean("duration_pending_"+url,true).putBoolean("selected_"+url,true).apply();
+      Toast.makeText(this,"Defina a duração no passo 3.",Toast.LENGTH_LONG).show();continue;
      }
      else if("action_copy".equals(type))((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));
      else if("action_open".equals(type))open(url);
@@ -472,6 +620,7 @@ public class MainActivity extends Activity {
  TextView song=label(field(x,"song","Música não identificada"),19,fg,true);song.setPadding(0,12,0,3);card.addView(song);
  TextView artist=label(field(x,"artist","Artista não identificado"),14,muted,false);card.addView(artist);
  TextView genre=label("ESTILO  "+field(x,"genre","Não informado"),12,Color.rgb(255,171,78),false);genre.setPadding(0,12,0,10);card.addView(genre);
+ if(x.has("video_duration_seconds")){int seconds=x.optInt("video_duration_seconds",15);TextView timing=label("VÍDEO  "+seconds+" segundos • todas as camadas sincronizadas",12,accent,false);timing.setPadding(0,4,0,10);card.addView(timing);}
  String recognition=x.optString("recognition_status","");
  if(!recognition.isEmpty()){
   String note="identified".equals(recognition)?"✓  CRÉDITOS DO SOM IDENTIFICADOS":
@@ -485,7 +634,11 @@ public class MainActivity extends Activity {
  if(prefs.getBoolean("review_pending_"+url,false)){
   TextView next=label("PRÓXIMO PASSO DO FLUXO: confirme música e artista na etapa 1.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
  }else if(prefs.getBoolean("image_pending_"+url,false)){
-  TextView next=label("PRÓXIMO PASSO DO FLUXO: escolha a imagem e a logo na etapa 2.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
+  TextView next=label("PRÓXIMO PASSO DO FLUXO: escolha a imagem na etapa 2.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
+ }else if(prefs.getBoolean("logo_pending_"+url,false)){
+  TextView next=label("PRÓXIMO PASSO DO FLUXO: posicione a logo na etapa 2.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
+ }else if(prefs.getBoolean("duration_pending_"+url,false)){
+  TextView next=label("PRÓXIMO PASSO DO FLUXO: defina a duração na etapa 3.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
  }
  TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
  CheckBox choose=new CheckBox(this);choose.setText("Selecionar esta música");choose.setTextColor(fg);choose.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));choose.setChecked(isSelected(url));choose.setPadding(0,16,0,6);card.addView(choose);
@@ -496,7 +649,7 @@ public class MainActivity extends Activity {
  Button image=action("2 • Escolher ou criar a capa",false);image.setOnClickListener(v->imageOptions(url));actions.addView(image);
  TextView imageHelp=label("Use uma foto, pesquise no Pinterest ou peça arte nova. A logo original é mantida inteira.",12,muted,false);imageHelp.setPadding(8,3,8,14);actions.addView(imageHelp);
  Button post=action("3 • Preparar a publicação",true);post.setOnClickListener(v->postOptions(url));actions.addView(post);
- TextView postHelp=label("Prepare a legenda e salve a capa vertical. Publicar no TikTok será uma decisão sua.",12,muted,false);postHelp.setPadding(8,3,8,14);actions.addView(postHelp);
+ TextView postHelp=label("Ajuste duração, prepare legenda e salve a capa. A publicação depende da sua confirmação.",12,muted,false);postHelp.setPadding(8,3,8,14);actions.addView(postHelp);
  CheckBox done=new CheckBox(this);done.setText("Resolvido");done.setTextColor(muted);done.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));done.setPadding(0,12,0,0);done.setOnCheckedChangeListener((button,checked)->{if(checked)markResolved(idx);});card.addView(done);
  }
  TextView advanced=label("OUTRAS CONFIGURAÇÕES",11,accent,true);advanced.setPadding(0,24,0,8);root.addView(advanced);
