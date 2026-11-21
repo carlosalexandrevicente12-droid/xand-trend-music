@@ -24,7 +24,7 @@ public final class ScriptExecutor {
       if(line.isEmpty()||line.startsWith("#"))continue;
       if(line.startsWith("AVISAR ")&&line.length()<=170&&line.substring(7).trim().length()>0)continue;
       if(line.equals("COPIAR_LINK")||line.equals("ABRIR_TIKTOK")||line.equals("MANTER_NA_FILA")||line.equals("COPIAR_LEGENDA"))continue;
-      if(line.equals("GERAR_LEGENDA")||line.equals("BUSCAR_PINTEREST")||line.equals("PREPARAR_ARTE")){if(++interactiveActions>1)return "Use apenas uma ação visual por script.";continue;}
+      if(line.equals("GERAR_LEGENDA")||line.equals("BUSCAR_PINTEREST")||line.equals("PREPARAR_ARTE")||line.equals("CRIAR_ARTE_CHATGPT")){if(++interactiveActions>1)return "Use apenas uma ação visual por script.";continue;}
       return "Comando inválido na linha "+(i+1)+": "+(line.length()>30?line.substring(0,30):line);
     }
     return "OK";
@@ -54,6 +54,7 @@ public final class ScriptExecutor {
             else if(line.equals("GERAR_LEGENDA"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.prepareCaption(url));
             else if(line.equals("BUSCAR_PINTEREST"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.pinterest(url));
             else if(line.equals("PREPARAR_ARTE"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.prepareArtwork(url));
+            else if(line.equals("CRIAR_ARTE_CHATGPT"))new android.os.Handler(android.os.Looper.getMainLooper()).post(()->main.sendArtworkPromptToChatGPT(url,false));
           }
                     // MANTER_NA_FILA does not duplicate: MainActivity already registered the link.
         }
