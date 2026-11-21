@@ -34,13 +34,16 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </style></head>
 <body>
 <header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
-<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>Toque em <b>Montar fluxo TikTok</b> para ver um exemplo pronto, já ligado e ativo. Depois você pode editar os nós.</p></div>
-<div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Montar fluxo TikTok</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O modelo conecta seis etapas. Identificar créditos é automático; confirmar artista e escolher imagem exigem sua decisão. Nada será publicado sozinho.</p></div>
+<div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Completar fluxo de criação</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
 <div class="main">
 <aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
 <h2 class="smalltitle">AÇÕES</h2><div class="palette">
 <button data-type="action_queue"><b>▤ Guardar na fila</b><small>Salva o link sem repetir. Não publica nada.</small></button>
 <button data-type="action_notify"><b>◉ Aviso na tela</b><small>Confirma na tela que o link chegou</small></button>
+<button data-type="action_identify"><b>♫ Consultar música</b><small>Procura título e artista nos créditos públicos (pode ficar sem resposta)</small></button>
+<button data-type="action_review"><b>✓ Confirmar dados</b><small>Pausa a automação até você confirmar música e artista</small></button>
+<button data-type="action_image"><b>▧ Escolher imagem</b><small>Após a confirmação, oferece celular, Pinterest ou ChatGPT</small></button>
 <button data-type="action_copy"><b>⧉ Copiar link</b><small>Deixa o link pronto para colar em outro app</small></button>
 <button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o TikTok quando o link chega</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Roda comandos que você salvou em Scripts</small></button>
 </div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
@@ -56,6 +59,9 @@ const TYPES={
  trigger_share:{name:'Receber link TikTok',description:'Gatilho: link compartilhado',kind:'trigger'},
  action_queue:{name:'Guardar na fila',description:'Registra sem duplicar',kind:'action'},
  action_notify:{name:'Aviso na tela',description:'Mostra confirmação',kind:'action'},
+ action_identify:{name:'Consultar música',description:'Consulta créditos públicos sem inventar artista',kind:'action'},
+ action_review:{name:'Confirmar dados',description:'Pausa até a confirmação humana do título e artista',kind:'action'},
+ action_image:{name:'Escolher capa',description:'Oferece imagem do celular, Pinterest ou ChatGPT',kind:'action'},
  action_copy:{name:'Copiar link',description:'Copia para a área de transferência',kind:'action'},
  action_open:{name:'Abrir TikTok',description:'Abre o aplicativo TikTok',kind:'action'},
  action_script:{name:'Executar script',description:'Escolha um script salvo',kind:'action'}
@@ -86,14 +92,34 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
 }
 function wires(){let f=current();let svg=$('wires');svg.replaceChildren();f.edges.forEach(edge=>{let a=f.nodes.find(x=>x.id===edge.from),b=f.nodes.find(x=>x.id===edge.to);if(!a||!b)return;let p=document.createElementNS('http://www.w3.org/2000/svg','path');let ax=a.x+205,ay=a.y+46,bx=b.x,by=b.y+46;let mid=(ax+bx)/2;p.setAttribute('d', 'M'+ax+' '+ay+' C'+mid+' '+ay+' '+mid+' '+by+' '+bx+' '+by);p.setAttribute('fill','none');p.setAttribute('stroke','#ff8500');p.setAttribute('stroke-width','3');svg.append(p);let c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',String(bx));c.setAttribute('cy',String(by));c.setAttribute('r','5');c.setAttribute('fill','#ff8500');svg.append(c)})}
 document.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{let f=current(),type=b.dataset.type,n={id:uid(),type,x:Math.min(820,35+f.nodes.length*60),y:Math.min(490,45+f.nodes.length*72)};if(f.nodes.length>=30){notify('Limite de 30 nós.');return}if(type==='action_script')n.scriptId=scriptsAvailable()[0]?.id||'';f.nodes.push(n);show();notify('Nó adicionado. Conecte e salve.')});
+function connectIfMissing(f,from,to){
+ if(from&&to&&!f.edges.some(e=>e.from===from.id&&e.to===to.id))f.edges.push({from:from.id,to:to.id});
+}
+function addCreationSteps(f){
+ const positions=[{x:690,y:295},{x:360,y:295},{x:30,y:295}];
+ const kinds=['action_identify','action_review','action_image'];
+ let previous=f.nodes.find(n=>n.type==='action_notify')||f.nodes.find(n=>n.type==='action_queue');
+ kinds.forEach((type,i)=>{
+  let node=f.nodes.find(n=>n.type===type);
+  if(!node){node={id:uid(),type,...positions[i]};f.nodes.push(node);}
+  connectIfMissing(f,previous,node);previous=node;
+ });
+ f.enabled=true;
+}
 $('template').onclick=()=>{
- const name='Entrada TikTok • guardar e avisar';
- const existing=flows.findIndex(f=>f.name===name);
- if(existing>=0){index=existing;show();notify('Este fluxo já existe. Se precisar, ative e salve.');return}
+ const oldName='Entrada TikTok • guardar e avisar';
+ const name='TikTok • identificar e escolher capa';
+ const existing=flows.findIndex(f=>f.name===oldName||f.name===name);
+ if(existing>=0){
+  index=existing;const f=current();
+  if(['action_identify','action_review','action_image'].every(type=>f.nodes.some(n=>n.type===type))){show();notify('Este modelo já está completo. Edite os nós se desejar.');return}
+  if(!confirm('Adicionar identificação, confirmação e imagem ao fluxo atual? Os nós existentes serão preservados.'))return;
+  addCreationSteps(f);f.name=name;show();persist();return;
+ }
  if(flows.length>=20){notify('Limite de 20 automações.');return}
  const a=uid(),b=uid(),c=uid();
- flows.push({id:uid(),name,enabled:true,nodes:[{id:a,type:'trigger_share',x:30,y:95},{id:b,type:'action_queue',x:360,y:95},{id:c,type:'action_notify',x:690,y:95}],edges:[{from:a,to:b},{from:b,to:c}]});
- index=flows.length-1;show();persist();
+ const f={id:uid(),name,enabled:true,nodes:[{id:a,type:'trigger_share',x:30,y:95},{id:b,type:'action_queue',x:360,y:95},{id:c,type:'action_notify',x:690,y:95}],edges:[{from:a,to:b},{from:b,to:c}]};
+ addCreationSteps(f);flows.push(f);index=flows.length-1;show();persist();
 };
 $('new').onclick=()=>{if(flows.length>=20){notify('Limite de 20 automações.');return}flows.push(fresh());index=flows.length-1;show();notify('Automação criada. Configure e salve.')};
 $('rename').onclick=()=>{let name=prompt('Nome da automação:',current().name);if(name!==null){current().name=name.trim().slice(0,60)||'Sem nome';show();notify('Nome atualizado. Salve os fluxos.')}};
@@ -107,6 +133,6 @@ window.addEventListener('focus',()=>{if(flows.length)show()});
 $('test').onclick=()=>{try{notify(bridge?.test(JSON.stringify(current()))||'Verificação local indisponível.')}catch(e){notify('Não foi possível testar o fluxo.')}};
 try{let saved=JSON.parse(bridge?.load()||'{}');if(Array.isArray(saved.flows))flows=saved.flows.filter(f=>f&&Array.isArray(f.nodes)&&Array.isArray(f.edges))}catch(e){}
 if(!flows.length)flows=[fresh()];
-show();notify('Monte um fluxo TikTok com um toque, ou edite os nós manualmente.');
+show();notify('Complete o fluxo de criação ou edite os nós manualmente.');
 })();
 </script></body></html>
