@@ -14,7 +14,7 @@ const projectChat = "https://chatgpt.com/g/" + PROJECT_ID +
 
 function createHarness(url = projectChat, response = () => ({
   assistantCount: 0, signature: "", busy: false, error: false, lastUserText: "teste"
-})) {
+}), handoffResult = () => ({ submitted: true })) {
   let now = 0;
   let nextTabId = 10;
   const tabs = new Map([[1, { id: 1, url }]]);
@@ -60,7 +60,7 @@ function createHarness(url = projectChat, response = () => ({
       },
       async sendMessage(id, message) {
         if (message.type === "XAND_PROBE") return response();
-        if (message.type === "XAND_INSERT_HANDOFF") return { submitted: true };
+        if (message.type === "XAND_INSERT_HANDOFF") return handoffResult();
         throw new Error("unexpected message");
       },
       onRemoved: { addListener() {} },
@@ -138,4 +138,22 @@ test("other projects and general chats are ignored", async () => {
     await h.clickAction();
     assert.equal(h.opened.length, 0);
   }
+});
+
+test("unsent recovery draft is retried without opening another tab", async () => {
+  let handoffAttempts = 0;
+  const h = createHarness(projectChat, () => ({
+    assistantCount: 0, signature: "", busy: false, error: false, lastUserText: "teste"
+  }), () => {
+    handoffAttempts++;
+    return { submitted: false, drafted: true, reason: "send unavailable" };
+  });
+  await h.clickAction();
+  assert.equal(h.opened.length, 1);
+  assert.equal(handoffAttempts, 1);
+  assert.equal(h.saved.has("recovery_11"), true);
+  h.setTime(60_000);
+  await h.tick();
+  assert.equal(handoffAttempts, 2);
+  assert.equal(h.opened.length, 1);
 });
