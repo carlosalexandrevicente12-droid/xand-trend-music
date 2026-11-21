@@ -17,8 +17,9 @@ const RECOVERY_RETRY_MS = 2 * 60 * 1000;
 function isProject(url) {
   try {
     const parsed = new URL(url);
+    const projectSegment = parsed.pathname.split("/")[2] || "";
     return parsed.origin === "https://chatgpt.com" &&
-      parsed.pathname.startsWith(PROJECT_PREFIX);
+      (projectSegment === PROJECT_ID || projectSegment.startsWith(PROJECT_ID + "-"));
   } catch {
     return false;
   }
