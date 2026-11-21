@@ -32,4 +32,4 @@ Extensão local do Chrome (Manifest V3), exclusiva do projeto ChatGPT **XAND MUS
 4. Não marque músicas como resolvidas durante o teste.
 
 ## Status
-Versão experimental **0.1.0**. Necessário validar visualmente no Chrome em uso; não considerar proteção em segundo plano confiável antes do teste.
+Versão experimental **0.1.0**. Em 21/11/2026, o teste manual abriu um novo chat no mesmo projeto, enviou o aviso de TESTE e recebeu resposta. Os quatro testes automatizados locais passaram: isolamento por projeto, abertura única após simulação de seis minutos sem resposta, cancelamento da recuperação quando a resposta chega e operação manual. O travamento real de seis/nove minutos **não** foi reproduzido; portanto a recuperação em caso real ainda depende de validação.
