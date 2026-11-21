@@ -71,13 +71,15 @@ function promptComposer() {
 
 function isSendButton(button) {
   if (!button) return false;
-  // ChatGPT's current project composer uses an unlabeled submit button.
-  if (button.type === "submit" &&
-      button.closest("form")?.contains(promptComposer())) return true;
   const label = ((button.getAttribute("aria-label") || "") + " " +
     (button.getAttribute("data-testid") || "")).toLowerCase();
-  return /(^|\s)(send|enviar)(\s|$|[-_])/.test(label) ||
-    /send-button/.test(label);
+  if (/(^|\\s)(send|enviar)(\\s|$|[-_])/.test(label) || /send-button/.test(label)) return true;
+  if (button.type !== "submit" || !promptComposer()) return false;
+  const editorRect = promptComposer().getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+  return buttonRect.width > 0 && buttonRect.height > 0 &&
+    buttonRect.left >= editorRect.left &&
+    Math.abs(buttonRect.bottom - editorRect.bottom) < 160;
 }
 
 document.addEventListener("click", (event) => {
@@ -95,32 +97,39 @@ document.addEventListener("keydown", (event) => {
   }
 }, true);
 
-function insertHandoff(text) {
+async function insertHandoff(text) {
   if (!isProject()) return { submitted: false, reason: "outside project" };
   const editor = promptComposer();
   if (!editor) return { submitted: false, reason: "composer not ready" };
   const payload = String(text || "").slice(0, 3500);
-  if (!payload.startsWith("RECUPERAÇÃO AUTOMÁTICA")) {
+  const marker = "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC";
+  if (!payload.startsWith(marker)) {
     return { submitted: false, reason: "unexpected handoff" };
   }
 
-  editor.focus();
-  // The ChatGPT composer is a rich editor; insertText preserves its input events.
-  document.execCommand("insertText", false, payload);
-  if (!(editor.innerText || editor.textContent || "").includes("RECUPERAÇÃO AUTOMÁTICA")) {
+  // Idempotent: never append a second copy if a prior attempt left a draft.
+  if (!(editor.innerText || editor.textContent || "").includes(marker)) {
+    editor.focus();
+    document.execCommand("insertText", false, payload);
+  }
+  if (!(editor.innerText || editor.textContent || "").includes(marker)) {
     return { submitted: false, reason: "composer insertion failed" };
   }
 
-  const composerForm = editor.closest("form");
-  const sendButton = composerForm?.querySelector('button[type="submit"]:not([disabled])') ||
+  // Let the editor update the enabled state of its submit button.
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const buttons = Array.from(document.querySelectorAll('button[type="submit"]'))
+    .filter((button) => !button.disabled && isSendButton(button));
+  const sendButton = buttons.find((button) =>
+    String(button.className).includes("bg-composer-primary")) || buttons.at(-1) ||
     Array.from(document.querySelectorAll("button"))
       .find((button) => isSendButton(button) && !button.disabled);
   if (sendButton) {
     sendButton.click();
     return { submitted: true };
   }
-  // A draft is preferable to silently losing the continuity text.
-  return { submitted: false, reason: "handoff left in composer; send unavailable" };
+  // Leave the single draft available and stop retries rather than duplicating it.
+  return { submitted: false, drafted: true, reason: "draft ready; send unavailable" };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -129,12 +138,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
   if (message?.type === "XAND_INSERT_HANDOFF") {
-    try {
-      sendResponse(insertHandoff(message.text));
-    } catch (error) {
+    void insertHandoff(message.text).then(sendResponse).catch((error) => {
       sendResponse({ submitted: false, reason: String(error).slice(0, 120) });
-    }
-    return false;
+    });
+    return true; // Keep the response channel open while the editor updates.
   }
   return false;
 });
