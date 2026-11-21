@@ -143,8 +143,14 @@ async function state(chrome) {
   })()`);
 }
 function selectedFile(s, filename) {
-  const matching = s.files.filter(f => f.value && (f.value === filename || f.value.endsWith('_' + filename)));
-  return matching.at(-1)?.value || null;
+  // Existing editor prefixes each upload and truncates the sanitized source stem to 40 chars.
+  // Never select an unrelated source simply because its last few words are equal.
+  const stem = filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'video';
+  const serverSuffix = '_' + stem + '.mp4';
+  const matching = s.files.filter(f => f.value && (
+    f.value === filename || f.value.endsWith('_' + filename) || f.value.endsWith(serverSuffix)
+  ));
+  return matching.sort((a,b) => Number(b.value.match(/^XAND_(\d+)_/)?.[1] || 0) - Number(a.value.match(/^XAND_(\d+)_/)?.[1] || 0))[0]?.value || null;
 }
 async function prepare(chrome, target, video, { allowMissing = false } = {}) {
   const s = await state(chrome);
