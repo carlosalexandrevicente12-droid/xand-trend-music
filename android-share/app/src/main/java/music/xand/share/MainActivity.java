@@ -712,6 +712,7 @@ public class MainActivity extends Activity {
     new AlertDialog.Builder(this).setTitle("Confirmar conclusão")
      .setMessage("Marque como resolvido somente depois de confirmar a publicação. O link ficará no histórico.")
      .setNegativeButton("Cancelar",(d,w)->done.setChecked(false))
+     .setOnCancelListener(d->done.setChecked(false))
      .setPositiveButton("Concluir",(d,w)->markResolved(index)).show();
    });
    Button manage=new Button(this);manage.setText("Gerenciar");manage.setAllCaps(false);
