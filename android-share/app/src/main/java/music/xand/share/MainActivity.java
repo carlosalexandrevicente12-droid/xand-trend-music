@@ -21,8 +21,8 @@ public class MainActivity extends Activity {
  JSONArray load(){try{return new JSONArray(prefs.getString("queue","[]"));}catch(Exception e){return new JSONArray();}}
  void save(JSONArray a){prefs.edit().putString("queue",a.toString()).apply();}
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
- void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.apply();show();}
- void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);runShareFlows(url);identifySong(url,false);}
+ void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).apply();show();}
+ void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
  public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();}
@@ -86,7 +86,7 @@ public class MainActivity extends Activity {
   try{
    JSONObject all=metadata();JSONObject item=all.optJSONObject(url);if(item==null)item=new JSONObject();
    item.put("image_uri",uri.toString());item.put("image_sha256",sha256);all.put(url,item);
-   prefs.edit().putString("metadata",all.toString()).apply();
+   prefs.edit().putString("metadata",all.toString()).putBoolean("image_pending_"+url,false).apply();
    Toast.makeText(this,"Imagem vinculada à música.",Toast.LENGTH_SHORT).show();show();
   }catch(Exception e){Toast.makeText(this,"Não foi possível registrar a imagem.",Toast.LENGTH_SHORT).show();}
  }
@@ -220,15 +220,16 @@ public class MainActivity extends Activity {
  JSONObject metadata(){try{return new JSONObject(prefs.getString("metadata","{}"));}catch(Exception e){return new JSONObject();}}
  JSONObject info(String url){JSONObject x=metadata().optJSONObject(url);return x==null?new JSONObject():x;}
  String field(JSONObject x,String key,String fallback){String s=x.optString(key,"").trim();return s.isEmpty()?fallback:s;}
- void edit(String url){JSONObject x=info(url);LinearLayout fields=new LinearLayout(this);fields.setOrientation(1);fields.setPadding(32,16,32,0);EditText song=new EditText(this);song.setHint("Nome da música");song.setSingleLine(true);song.setText(x.optString("song"));fields.addView(song);EditText artist=new EditText(this);artist.setHint("Artista");artist.setSingleLine(true);artist.setText(x.optString("artist"));fields.addView(artist);EditText genre=new EditText(this);genre.setHint("Estilo musical (opcional)");genre.setSingleLine(true);genre.setText(x.optString("genre"));fields.addView(genre);new AlertDialog.Builder(this).setTitle("Dados da música").setView(fields).setNegativeButton("Cancelar",null).setPositiveButton("Salvar",(d,w)->{try{JSONObject all=metadata();JSONObject info=all.optJSONObject(url);if(info==null)info=new JSONObject();info.put("song",song.getText().toString().trim());info.put("artist",artist.getText().toString().trim());info.put("genre",genre.getText().toString().trim());all.put(url,info);prefs.edit().putString("metadata",all.toString()).apply();show();}catch(Exception e){Toast.makeText(this,"Erro ao salvar",Toast.LENGTH_SHORT).show();}}).show();}
+ void edit(String url){JSONObject x=info(url);LinearLayout fields=new LinearLayout(this);fields.setOrientation(1);fields.setPadding(32,16,32,0);EditText song=new EditText(this);song.setHint("Nome da música");song.setSingleLine(true);song.setText(x.optString("song"));fields.addView(song);EditText artist=new EditText(this);artist.setHint("Artista");artist.setSingleLine(true);artist.setText(x.optString("artist"));fields.addView(artist);EditText genre=new EditText(this);genre.setHint("Estilo musical (opcional)");genre.setSingleLine(true);genre.setText(x.optString("genre"));fields.addView(genre);new AlertDialog.Builder(this).setTitle("Dados da música").setView(fields).setNegativeButton("Cancelar",null).setPositiveButton("Salvar",(d,w)->{try{JSONObject all=metadata();JSONObject info=all.optJSONObject(url);if(info==null)info=new JSONObject();info.put("song",song.getText().toString().trim());info.put("artist",artist.getText().toString().trim());info.put("genre",genre.getText().toString().trim());all.put(url,info);prefs.edit().putString("metadata",all.toString()).apply();show();if(prefs.getBoolean("review_pending_"+url,false)&&!song.getText().toString().trim().isEmpty()&&!artist.getText().toString().trim().isEmpty())confirmReview(url);}catch(Exception e){Toast.makeText(this,"Erro ao salvar",Toast.LENGTH_SHORT).show();}}).show();}
 
  void identifyOptions(String url){
-  String[] options={"Reconhecer a música ouvindo (Audile grátis)","Consultar informações públicas do TikTok","Informar ou corrigir título, artista e estilo","Abrir TikTok para ouvir"};
+  String[] options={"Reconhecer a música ouvindo (Audile grátis)","Consultar informações públicas do TikTok","Informar ou corrigir título, artista e estilo","Confirmar dados e seguir para imagem","Abrir TikTok para ouvir"};
   new AlertDialog.Builder(this).setTitle("1 • Identificar música")
    .setItems(options,(d,which)->{
     if(which==0)launchAudile(url);
     else if(which==1)identifySong(url,true);
     else if(which==2)edit(url);
+    else if(which==3)confirmReview(url);
     else open(url);
    }).setNegativeButton("Voltar",null).show();
  }
@@ -316,10 +317,46 @@ public class MainActivity extends Activity {
  
  
  
- void runShareFlows(String url){
+ boolean hasImageAfterReview(){
+  try{
+   JSONArray flows=new JSONObject(prefs.getString("workflows_v1","{}")).optJSONArray("flows");if(flows==null)return false;
+   for(int i=0;i<flows.length();i++){
+    JSONObject flow=flows.optJSONObject(i);if(flow==null||!flow.optBoolean("enabled",false))continue;
+    JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");if(nodes==null||edges==null)continue;
+    java.util.HashMap<String,String> types=new java.util.HashMap<>();
+    for(int n=0;n<nodes.length();n++){JSONObject node=nodes.optJSONObject(n);if(node!=null)types.put(node.optString("id"),node.optString("type"));}
+    for(int e=0;e<edges.length();e++){JSONObject edge=edges.optJSONObject(e);if(edge!=null&&"action_review".equals(types.get(edge.optString("from")))&&"action_image".equals(types.get(edge.optString("to"))))return true;}
+   }
+  }catch(Exception ignored){}
+  return false;
+ }
+ void completeReview(String url){
+  if(needsMetadata(url))return;
+  prefs.edit().remove("review_pending_"+url).apply();
+  if(hasImageAfterReview()&&info(url).optString("image_uri","").isEmpty()){
+   prefs.edit().putBoolean("image_pending_"+url,true).apply();
+   show();imageOptions(url);
+  }else{
+   show();Toast.makeText(this,"Dados confirmados para esta música.",Toast.LENGTH_LONG).show();
+  }
+ }
+ void confirmReview(String url){
+  JSONObject item=info(url);
+  String song=item.optString("song","").trim(),artist=item.optString("artist","").trim(),genre=item.optString("genre","").trim();
+  if(song.isEmpty()||artist.isEmpty()){
+   prefs.edit().putBoolean("review_pending_"+url,true).apply();
+   edit(url);return;
+  }
+  new AlertDialog.Builder(this).setTitle("Confirmar dados da música")
+   .setMessage("Música: "+song+"\\nArtista: "+artist+"\\nEstilo: "+(genre.isEmpty()?"Não informado":genre)+"\\n\\nConfirme somente se os dados estiverem corretos. O nome do som original no TikTok não comprova o artista.")
+   .setNegativeButton("Corrigir",(d,w)->edit(url))
+   .setPositiveButton("Confirmar e continuar",(d,w)->completeReview(url)).show();
+ }
+ boolean runShareFlows(String url){
+  boolean identifiedByNode=false;
   try{
    JSONObject saved=new JSONObject(prefs.getString("workflows_v1","{}"));
-   JSONArray flows=saved.optJSONArray("flows");if(flows==null)return;
+   JSONArray flows=saved.optJSONArray("flows");if(flows==null)return false;
    for(int i=0;i<flows.length();i++){
     JSONObject flow=flows.optJSONObject(i);if(flow==null||!flow.optBoolean("enabled",false))continue;
     JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");if(nodes==null||edges==null)continue;
@@ -333,14 +370,26 @@ public class MainActivity extends Activity {
      String current=todo.removeFirst();if(!visited.add(current))continue;
      String type=types.get(current);
      if("action_notify".equals(type))Toast.makeText(this,"XAND: link recebido pela automação.",Toast.LENGTH_SHORT).show();
+     else if("action_identify".equals(type)){identifiedByNode=true;identifySong(url,false);}
+     else if("action_review".equals(type)){
+      prefs.edit().putBoolean("review_pending_"+url,true).putBoolean("selected_"+url,true).apply();
+      Toast.makeText(this,"Confira música e artista no passo 1 para continuar.",Toast.LENGTH_LONG).show();
+      continue; // A confirmação humana é obrigatória antes de prosseguir.
+     }
+     else if("action_image".equals(type)){
+      prefs.edit().putBoolean("image_pending_"+url,true).putBoolean("selected_"+url,true).apply();
+      Toast.makeText(this,"Escolha a imagem e a logo no passo 2.",Toast.LENGTH_LONG).show();
+      continue;
+     }
      else if("action_copy".equals(type))((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));
      else if("action_open".equals(type))open(url);
      else if("action_script".equals(type))ScriptExecutor.run(this,prefs,assignedScripts.getOrDefault(current,""),url);
-     // action_queue is idempotent: add() already saved the received link.
+     // action_queue é idempotente: add() já registrou o link.
      for(int e=0;e<edges.length();e++){JSONObject edge=edges.optJSONObject(e);if(edge!=null&&current.equals(edge.optString("from"))){String dest=edge.optString("to");if(types.containsKey(dest)&&!visited.contains(dest))todo.addLast(dest);}}
     }
    }
   }catch(Exception ex){Toast.makeText(this,"Falha ao executar automação.",Toast.LENGTH_SHORT).show();}
+  return identifiedByNode;
  }
 
  void identifySong(String url,boolean interactive){
@@ -433,6 +482,11 @@ public class MainActivity extends Activity {
  }
  String sound=x.optString("sound_hint","").trim();
  if(!sound.isEmpty()&&!"identified".equals(recognition)){TextView hint=label("Som indicado no TikTok: "+sound,12,Color.rgb(255,171,78),false);hint.setPadding(0,4,0,12);card.addView(hint);}
+ if(prefs.getBoolean("review_pending_"+url,false)){
+  TextView next=label("PRÓXIMO PASSO DO FLUXO: confirme música e artista na etapa 1.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
+ }else if(prefs.getBoolean("image_pending_"+url,false)){
+  TextView next=label("PRÓXIMO PASSO DO FLUXO: escolha a imagem e a logo na etapa 2.",12,accent,true);next.setPadding(0,8,0,10);card.addView(next);
+ }
  TextView link=label(url,11,muted,false);link.setTextIsSelectable(true);card.addView(link);
  CheckBox choose=new CheckBox(this);choose.setText("Selecionar esta música");choose.setTextColor(fg);choose.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));choose.setChecked(isSelected(url));choose.setPadding(0,16,0,6);card.addView(choose);
  LinearLayout actions=new LinearLayout(this);actions.setOrientation(1);actions.setVisibility(isSelected(url)?View.VISIBLE:View.GONE);card.addView(actions);
