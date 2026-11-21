@@ -31,6 +31,25 @@ public class WorkflowActivity extends Activity {
   final class Bridge {
     @JavascriptInterface public String scripts(){return prefs.getString("scripts_v1","{\"version\":1,\"scripts\":[]}");}
     @JavascriptInterface public void openScripts(){runOnUiThread(()->startActivity(new Intent(WorkflowActivity.this,ScriptActivity.class)));}
+    @JavascriptInterface public void selectLogo(){runOnUiThread(()->{Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("image/*");pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);startActivityForResult(pick,81);});}
+    @JavascriptInterface public String continuePending(){
+      try{
+        JSONArray queue=new JSONArray(prefs.getString("queue","[]"));
+        for(int i=0;i<queue.length();i++){
+          String url=queue.optString(i);String stage="";
+          if(prefs.getBoolean("review_pending_"+url,false))stage="review";
+          else if(prefs.getBoolean("image_pending_"+url,false))stage="image";
+          else if(prefs.getBoolean("logo_pending_"+url,false))stage="logo";
+          else if(prefs.getBoolean("duration_pending_"+url,false))stage="duration";
+          if(!stage.isEmpty()){
+            final String target=url,step=stage;
+            runOnUiThread(()->{Intent intent=new Intent(WorkflowActivity.this,MainActivity.class);intent.putExtra("xand_pending_url",target);intent.putExtra("xand_pending_stage",step);startActivity(intent);});
+            return "Abrindo a próxima etapa da fila.";
+          }
+        }
+        return "Nenhuma etapa manual pendente. Aguarde a próxima música.";
+      }catch(Exception e){return "Não foi possível consultar a fila.";}
+    }
     @JavascriptInterface public String load(){
       return prefs.getString("workflows_v1","{\"version\":1,\"flows\":[]}");
     }
@@ -59,6 +78,15 @@ public class WorkflowActivity extends Activity {
         if(edges.length()==0)return "Conecte o gatilho a pelo menos uma ação.";
         return "Fluxo válido. Ative e salve para executar ao compartilhar links.";
       }catch(Exception exception){return "Não foi possível testar o fluxo.";}
+    }
+  }
+  @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+    super.onActivityResult(requestCode,resultCode,data);
+    if(requestCode==81&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+      android.net.Uri uri=data.getData();
+      try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException denied){Toast.makeText(this,"Não foi possível manter acesso à logo.",Toast.LENGTH_LONG).show();return;}
+      prefs.edit().putString("logo_uri",uri.toString()).apply();
+      Toast.makeText(this,"Logo original registrada, sem alterações.",Toast.LENGTH_LONG).show();
     }
   }
   @Override public void onBackPressed(){
