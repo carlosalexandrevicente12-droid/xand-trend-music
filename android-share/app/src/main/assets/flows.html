@@ -34,7 +34,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </style></head>
 <body>
 <header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
-<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O modelo conecta seis etapas. Identificar créditos é automático; confirmar artista e escolher imagem exigem sua decisão. Nada será publicado sozinho.</p></div>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O modelo conecta oito etapas. Créditos são consultados automaticamente; confirmação, imagem, logo e duração exigem sua escolha. Nada é publicado sozinho.</p></div>
 <div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Completar fluxo de criação</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
 <div class="main">
 <aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
@@ -44,6 +44,8 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 <button data-type="action_identify"><b>♫ Consultar música</b><small>Procura título e artista nos créditos públicos (pode ficar sem resposta)</small></button>
 <button data-type="action_review"><b>✓ Confirmar dados</b><small>Pausa a automação até você confirmar música e artista</small></button>
 <button data-type="action_image"><b>▧ Escolher imagem</b><small>Após a confirmação, oferece celular, Pinterest ou ChatGPT</small></button>
+<button data-type="action_logo"><b>◈ Posicionar logo</b><small>Arrastar e ajustar tamanho, mantendo a logo completa</small></button>
+<button data-type="action_duration"><b>◷ Definir duração</b><small>Uma duração para todas as camadas do vídeo</small></button>
 <button data-type="action_copy"><b>⧉ Copiar link</b><small>Deixa o link pronto para colar em outro app</small></button>
 <button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o TikTok quando o link chega</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Roda comandos que você salvou em Scripts</small></button>
 </div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
@@ -62,6 +64,8 @@ const TYPES={
  action_identify:{name:'Consultar música',description:'Consulta créditos públicos sem inventar artista',kind:'action'},
  action_review:{name:'Confirmar dados',description:'Pausa até a confirmação humana do título e artista',kind:'action'},
  action_image:{name:'Escolher capa',description:'Oferece imagem do celular, Pinterest ou ChatGPT',kind:'action'},
+ action_logo:{name:'Posicionar logo',description:'Arrastar e dimensionar logo sem cortes (decisão manual)',kind:'action'},
+ action_duration:{name:'Definir duração',description:'Todas as camadas começam e terminam juntas',kind:'action'},
  action_copy:{name:'Copiar link',description:'Copia para a área de transferência',kind:'action'},
  action_open:{name:'Abrir TikTok',description:'Abre o aplicativo TikTok',kind:'action'},
  action_script:{name:'Executar script',description:'Escolha um script salvo',kind:'action'}
@@ -95,11 +99,11 @@ document.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{let f=current
 function connectIfMissing(f,from,to){
  if(from&&to&&!f.edges.some(e=>e.from===from.id&&e.to===to.id))f.edges.push({from:from.id,to:to.id});
 }
-function addCreationSteps(f){
- const positions=[{x:690,y:295},{x:360,y:295},{x:30,y:295}];
- const kinds=['action_identify','action_review','action_image'];
+function appendStages(f){
+ const types=['action_identify','action_review','action_image','action_logo','action_duration'];
+ const positions=[{x:690,y:295},{x:360,y:295},{x:30,y:295},{x:30,y:495},{x:360,y:495}];
  let previous=f.nodes.find(n=>n.type==='action_notify')||f.nodes.find(n=>n.type==='action_queue');
- kinds.forEach((type,i)=>{
+ types.forEach((type,i)=>{
   let node=f.nodes.find(n=>n.type===type);
   if(!node){node={id:uid(),type,...positions[i]};f.nodes.push(node);}
   connectIfMissing(f,previous,node);previous=node;
@@ -107,19 +111,19 @@ function addCreationSteps(f){
  f.enabled=true;
 }
 $('template').onclick=()=>{
- const oldName='Entrada TikTok • guardar e avisar';
- const name='TikTok • identificar e escolher capa';
- const existing=flows.findIndex(f=>f.name===oldName||f.name===name);
+ const names=['Entrada TikTok • guardar e avisar','TikTok • identificar e escolher capa','TikTok • criação visual e duração'];
+ const name=names[2];
+ const existing=flows.findIndex(f=>names.includes(f.name));
  if(existing>=0){
   index=existing;const f=current();
-  if(['action_identify','action_review','action_image'].every(type=>f.nodes.some(n=>n.type===type))){show();notify('Este modelo já está completo. Edite os nós se desejar.');return}
-  if(!confirm('Adicionar identificação, confirmação e imagem ao fluxo atual? Os nós existentes serão preservados.'))return;
-  addCreationSteps(f);f.name=name;show();persist();return;
+  if(['action_identify','action_review','action_image','action_logo','action_duration'].every(type=>f.nodes.some(n=>n.type===type))){show();notify('Oito etapas disponíveis. Edite os nós conforme sua preferência.');return}
+  if(!confirm('Adicionar posicionamento da logo e duração sincronizada ao fluxo? Os nós existentes serão mantidos.'))return;
+  appendStages(f);f.name=name;show();persist();return;
  }
  if(flows.length>=20){notify('Limite de 20 automações.');return}
  const a=uid(),b=uid(),c=uid();
  const f={id:uid(),name,enabled:true,nodes:[{id:a,type:'trigger_share',x:30,y:95},{id:b,type:'action_queue',x:360,y:95},{id:c,type:'action_notify',x:690,y:95}],edges:[{from:a,to:b},{from:b,to:c}]};
- addCreationSteps(f);flows.push(f);index=flows.length-1;show();persist();
+ appendStages(f);flows.push(f);index=flows.length-1;show();persist();
 };
 $('new').onclick=()=>{if(flows.length>=20){notify('Limite de 20 automações.');return}flows.push(fresh());index=flows.length-1;show();notify('Automação criada. Configure e salve.')};
 $('rename').onclick=()=>{let name=prompt('Nome da automação:',current().name);if(name!==null){current().name=name.trim().slice(0,60)||'Sem nome';show();notify('Nome atualizado. Salve os fluxos.')}};
