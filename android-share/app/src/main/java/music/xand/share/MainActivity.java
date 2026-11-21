@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->resumePendingCreation(),900);}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){if(intent.getType()!=null&&intent.getType().startsWith("image/")){show();receiveSharedArtwork(intent);return;}String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
  
@@ -674,6 +674,19 @@ void openPendingStepIfRequested(Intent incoming){
   JSONArray items=load();for(int i=0;i<items.length();i++)if(url.equals(items.optString(i)))return true;
   return false;
  }
+ // Recover pending work after the Android process restarts.
+ void resumePendingCreation(){
+  JSONArray items=load();
+  for(int i=0;i<items.length();i++){
+   String url=items.optString(i);
+   JSONObject item=info(url);
+   if("identified".equals(item.optString("recognition_status")) &&
+       item.optString("generated_cover_uri","").isEmpty()){
+    continueCreativeAutomation(url);
+    return;
+   }
+  }
+ }
  void invokeChatArtScript(String url,JSONObject flow){
   if(prefs.getBoolean("chatgpt_handoff_"+url,false))return;
   JSONObject caption=connectedNode(flow,"action_caption");
@@ -728,16 +741,15 @@ void openPendingStepIfRequested(Intent incoming){
     all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
     if(image==null)return;
     String source=image.optString("image_source","chatgpt_chat");
-    if("chatgpt_chat".equals(source)){
-     if(item.optString("generated_cover_uri","").isEmpty()){
-      item.put("generation_issue","Aguardando a imagem criada no ChatGPT Chat.");
-      all.put(url,item);prefs.edit().putString("metadata",all.toString())
-        .putBoolean("image_pending_"+url,true).apply();
-      invokeChatArtScript(url,flow);
-     }else prefs.edit().remove("image_pending_"+url).apply();
-     return;
+    final boolean chatSource="chatgpt_chat".equals(source);
+    if(chatSource && item.optString("generated_cover_uri","").isEmpty()){
+     item.put("generation_issue","Preparando capa automática de reserva para ChatGPT Chat.");
+     all.put(url,item);prefs.edit().putString("metadata",all.toString())
+       .putBoolean("image_pending_"+url,true).apply();
+     invokeChatArtScript(url,flow);
     }
-    if(!"generated_local".equals(source))return;
+    // The free on-device image is a fallback; ChatGPT artwork can replace it.
+    if(!chatSource && !"generated_local".equals(source))return;
     if(!item.optString("generated_cover_uri","").isEmpty()||
        !item.optString("image_uri","").isEmpty()){
      prefs.edit().remove("image_pending_"+url).remove("image_generating_"+url).apply();
@@ -770,8 +782,9 @@ void openPendingStepIfRequested(Intent incoming){
        if(updated==null)updated=new JSONObject();
        if(finished!=null){
         updated.put("generated_cover_uri",finished.toString());
-        updated.put("generated_cover_source","generated_local");
+        updated.put("generated_cover_source",chatSource?"generated_local_fallback":"generated_local");
         updated.put("generated_cover_style",artStyle);
+        if(chatSource)updated.put("generation_note","Capa local pronta. A arte do ChatGPT pode substituí-la.");
         updated.remove("generation_issue");
         prefs.edit().remove("image_pending_"+url).remove("logo_pending_"+url)
           .remove("duration_pending_"+url).apply();
