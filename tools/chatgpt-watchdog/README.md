@@ -6,7 +6,7 @@ Extensão local do Chrome (Manifest V3), exclusiva do projeto ChatGPT **XAND MUS
 - Observa apenas as páginas do projeto de ID `g-p-6b0182d2a7a0819183158c736eb617ed`.
 - Detecta o envio de mensagem na interface, acompanha sinais visíveis de resposta e verifica o estado uma vez por minuto.
 - Se surgir erro visível por 45 segundos, ou não houver resposta por 6 minutos, ou o fluxo de texto ficar parado por 9 minutos, tenta **abrir um único chat novo no mesmo projeto**.
-- Inicia o chat com um aviso de recuperação, endereço do chat anterior e trecho da última solicitação, pedindo conferência do trabalho antes de repetir qualquer ação.
+- Inicia o chat com um aviso de recuperação, endereço do chat anterior, último pedido capturado antes do envio e, quando disponível, um trecho da resposta anterior. Pede conferência do estado real antes de repetir qualquer ação.
 - Nunca apaga chats, não publica nada no TikTok, não acessa Work/Codex, não grava capturas de tela, não chama APIs externas e não lê outros projetos.
 - Ao clicar no ícone da extensão dentro do projeto, faz um **teste manual não destrutivo**: abre outro chat identificado como TESTE.
 
@@ -22,7 +22,7 @@ Extensão local do Chrome (Manifest V3), exclusiva do projeto ChatGPT **XAND MUS
 - A detecção depende da estrutura visual atual do ChatGPT, que pode mudar; portanto é uma tentativa de recuperação, não uma garantia.
 - O envio automático do resumo depende do campo de mensagem do site estar acessível. Se falhar, a nova aba do projeto permanece aberta.
 - Demoras normais (raciocínio, imagem ou ferramentas) podem parecer travamento. A extensão usa limites conservadores e no máximo uma tentativa por ocorrência.
-- O trecho da última mensagem é lido apenas no momento da falha. O estado temporário da extensão fica em `chrome.storage.session`, sem armazenar conteúdo de conversas em disco.
+- O último pedido é capturado do campo de escrita **no momento do envio**, antes de o editor ser limpo; o trecho da resposta anterior é capturado quando disponível. Esses trechos ficam apenas em `chrome.storage.session` durante a sessão do Chrome, sem arquivos ou capturas de tela. Após reiniciar navegador ou extensão, essa memória temporária pode desaparecer.
 - Se alguma ação externa do chat anterior ainda estiver em execução, **não** deve ser repetida sem verificar o resultado.
 
 ## Teste rápido
@@ -32,4 +32,4 @@ Extensão local do Chrome (Manifest V3), exclusiva do projeto ChatGPT **XAND MUS
 4. Não marque músicas como resolvidas durante o teste.
 
 ## Status
-Versão experimental **0.1.0**. Em 21/11/2026, o teste manual abriu um novo chat no mesmo projeto, enviou o aviso de TESTE e recebeu resposta. Os quatro testes automatizados locais passaram: isolamento por projeto, abertura única após simulação de seis minutos sem resposta, cancelamento da recuperação quando a resposta chega e operação manual. O travamento real de seis/nove minutos **não** foi reproduzido; portanto a recuperação em caso real ainda depende de validação.
+Versão experimental **0.1.0**. Em 21/11/2026, um teste controlado de falha de rede em uma única aba fez a extensão abrir automaticamente novo chat dentro do projeto, enviar o aviso de recuperação e receber resposta. A simulação de tempo e os testes da captura de contexto são automatizados; **a perda real do serviço e um travamento de seis/nove minutos não foram reproduzidos**. Não há garantia de leitura do histórico completo do chat anterior: somente os trechos capturados, o URL e a memória/instruções do projeto são transferidos.
