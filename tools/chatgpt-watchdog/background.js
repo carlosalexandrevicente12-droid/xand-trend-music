@@ -141,7 +141,9 @@ async function tryHandoff(tabId) {
   } catch {
     return; // React app may not have mounted; next alarm retries.
   }
-  if (result?.submitted || result?.drafted) await sessionRemove(key);
+  if (result?.submitted) await sessionRemove(key);
+  // Keep a single unsent draft available for retry until the two-minute deadline.
+  else if (result?.drafted) await sessionSet(key, { ...job, lastError: String(result.reason || "send unavailable") });
 }
 
 async function checkPending(tabId, state, now) {
