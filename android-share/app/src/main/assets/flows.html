@@ -65,7 +65,7 @@ const TYPES={
  action_identify:{name:'Consultar música',description:'Consulta créditos públicos sem inventar artista',kind:'action'},
  action_review:{name:'Validar créditos',description:'Segue com créditos confiáveis; solicita confirmação quando faltar informação',kind:'action'},
  action_image:{name:'Criar arte',description:'ChatGPT Chat via script ou arte gráfica local',kind:'action'},
- action_logo:{name:'Posicionar logo',description:'Arrastar e dimensionar logo sem cortes (decisão manual)',kind:'action'},
+ action_logo:{name:'Posicionar logo',description:'Logo completa embaixo, sem cobrir título e artista',kind:'action'},
  action_duration:{name:'Definir duração',description:'Todas as camadas começam e terminam juntas',kind:'action'},
  action_caption:{name:'Criar legenda',description:'Monta uma legenda sem inventar créditos',kind:'action'},
  action_copy:{name:'Copiar link',description:'Copia para a área de transferência',kind:'action'},
@@ -132,7 +132,7 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
   [['rightTop','Superior direita'],['centerTop','Superior centro'],['rightBottom','Inferior direita'],['centerBottom','Inferior centro']].forEach(([value,title])=>{
     let o=document.createElement('option');o.value=value;o.textContent=title;choice.append(o);
   });
-  choice.value=n.placement||'rightTop';choice.onclick=e=>e.stopPropagation();
+  choice.value=n.placement||'centerBottom';choice.onclick=e=>e.stopPropagation();
   choice.onchange=e=>{n.placement=e.target.value;notify('Posição padrão alterada. Salve o fluxo.');};body.append(choice);
   const size=document.createElement('select');size.style.cssText='width:100%;margin-top:5px;font-size:11px';
   [25,35,38,45,55].forEach(v=>{let o=document.createElement('option');o.value=String(v);o.textContent='Logo: '+v+'% da largura';size.append(o)});
