@@ -16,6 +16,7 @@ import java.util.regex.*;
 public class MainActivity extends Activity {
  SharedPreferences prefs; LinearLayout root;
  final java.util.Set<String> coversInProgress=java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+ final java.util.Map<String,VideoExporter> videoJobs=new java.util.HashMap<>();
  String pendingImageUrl="",pendingExportUrl="",pendingLogoUrl="";
  boolean shareIntentHandled=false;
  void clearConsumedShareIntent(){Intent safe=new Intent(this,MainActivity.class);safe.setAction(Intent.ACTION_MAIN);safe.addCategory(Intent.CATEGORY_LAUNCHER);setIntent(safe);}
@@ -24,7 +25,7 @@ public class MainActivity extends Activity {
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->resumePendingCreation(),900);}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{resumePendingCreation();resumePendingVideoExport();},900);}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){if(intent.getType()!=null&&intent.getType().startsWith("image/")){show();receiveSharedArtwork(intent);return;}String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
  
@@ -124,7 +125,7 @@ public class MainActivity extends Activity {
      all.put(url,item);
      prefs.edit().putString("metadata",all.toString()).remove("image_pending_"+url)
        .remove("logo_pending_"+url).remove("duration_pending_"+url).apply();
-     show();Toast.makeText(this,"Arte do ChatGPT vinculada à música.",Toast.LENGTH_LONG).show();
+     show();resumePendingVideoExport();Toast.makeText(this,"Arte do ChatGPT vinculada à música.",Toast.LENGTH_LONG).show();
     }catch(Exception ex){Toast.makeText(this,"Falha ao vincular arte.",Toast.LENGTH_LONG).show();}
    });
   }).start();
@@ -310,7 +311,7 @@ void openPendingStepIfRequested(Intent incoming){
   SeekBar duration=new SeekBar(this);duration.setMax(120);duration.setProgress(initial-60);body.addView(duration);
   TextView timeline=label("Todas as camadas: 00:00 → "+String.format(java.util.Locale.ROOT,"%02d:%02d",initial/60,initial%60),13,fg,true);
   timeline.setPadding(0,12,0,12);body.addView(timeline);
-  TextView note=label("Esta etapa salva a linha do tempo. Exportar um vídeo MP4 com áudio será uma funcionalidade posterior; o PNG continua disponível.",12,muted,false);body.addView(note);
+  TextView note=label("O aplicativo produz MP4 sem áudio, de 1 a 3 minutos, e salva na galeria. Adicione a música pelo TikTok ao publicar.",12,muted,false);body.addView(note);
   final int[] seconds={initial};
   duration.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
    public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
@@ -325,11 +326,16 @@ void openPendingStepIfRequested(Intent incoming){
    .setPositiveButton("Salvar duração",(d,w)->{
     try{
      JSONObject all=metadata();JSONObject updated=all.optJSONObject(url);if(updated==null)updated=new JSONObject();
+     int previous=updated.optInt("video_duration_seconds",60);
      updated.put("video_duration_seconds",seconds[0]);
      updated.put("video_timing_mode","all_layers_full_duration");
+     if(previous!=seconds[0]&&!updated.optString("video_uri","").isEmpty()){
+      updated.put("video_previous_uri",updated.optString("video_uri"));
+      updated.remove("video_uri");updated.remove("video_export_issue");
+     }
      all.put(url,updated);
      prefs.edit().putString("metadata",all.toString()).remove("duration_pending_"+url).apply();
-     show();Toast.makeText(this,"Todas as camadas ajustadas para "+seconds[0]+" segundos.",Toast.LENGTH_LONG).show();
+     show();resumePendingVideoExport();Toast.makeText(this,"Todas as camadas ajustadas para "+seconds[0]+" segundos.",Toast.LENGTH_LONG).show();
     }catch(Exception e){Toast.makeText(this,"Não foi possível salvar duração.",Toast.LENGTH_LONG).show();}
    }).show();
  }
@@ -687,6 +693,88 @@ void openPendingStepIfRequested(Intent incoming){
    }
   }
  }
+
+ // Export one queued clip at a time to limit memory use on the Moto G82.
+ void resumePendingVideoExport(){
+  if(!videoJobs.isEmpty())return;
+  JSONArray items=load();
+  for(int i=0;i<items.length();i++){
+   String url=items.optString(i);
+   JSONObject item=info(url);
+   if(!"identified".equals(item.optString("recognition_status","")) &&
+      !prefs.getBoolean("review_confirmed_"+url,false))continue;
+   String cover=item.optString("generated_cover_uri","");
+   if(cover.isEmpty()||item.optString("caption_auto","").isEmpty()||
+      !item.optString("video_uri","").isEmpty()||
+      !item.optString("video_export_issue","").isEmpty())continue;
+   int seconds=Math.max(60,Math.min(180,item.optInt("video_duration_seconds",60)));
+   prefs.edit().putBoolean("video_exporting_"+url,true).apply();
+   VideoExporter job=new VideoExporter(this);
+   videoJobs.put(url,job);
+   job.start(Uri.parse(cover),seconds,new VideoExporter.Callback(){
+    @Override public void onSuccess(Uri videoUri){
+     videoJobs.remove(url);
+     prefs.edit().remove("video_exporting_"+url).apply();
+     try{
+      JSONObject all=metadata(),now=all.optJSONObject(url);
+      if(now==null)now=new JSONObject();
+      int currentSeconds=Math.max(60,Math.min(180,now.optInt("video_duration_seconds",60)));
+      String currentCover=now.optString("generated_cover_uri","");
+      if(currentSeconds!=seconds||!cover.equals(currentCover)){
+       now.put("video_previous_uri",videoUri.toString());
+       now.remove("video_uri");
+      }else{
+       now.put("video_uri",videoUri.toString());
+       now.put("video_render_duration_seconds",seconds);
+       now.put("video_render_cover_uri",cover);
+       now.put("video_audio_status","not_embedded");
+       now.remove("video_export_issue");
+      }
+      all.put(url,now);prefs.edit().putString("metadata",all.toString()).apply();
+     }catch(Exception ignored){}
+     show();resumePendingVideoExport();
+    }
+    @Override public void onError(String reason){
+     videoJobs.remove(url);
+     prefs.edit().remove("video_exporting_"+url).apply();
+     try{
+      JSONObject all=metadata(),now=all.optJSONObject(url);
+      if(now==null)now=new JSONObject();
+      now.put("video_export_issue",reason==null?"Falha na exportação MP4.":reason);
+      all.put(url,now);prefs.edit().putString("metadata",all.toString()).apply();
+     }catch(Exception ignored){}
+     show();resumePendingVideoExport();
+    }
+   });
+   show();
+   return;
+  }
+ }
+ void retryVideoExport(String url){
+  try{
+   JSONObject all=metadata(),item=all.optJSONObject(url);
+   if(item==null)return;
+   item.remove("video_export_issue");
+   all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
+   resumePendingVideoExport();
+  }catch(Exception error){Toast.makeText(this,"Falha ao solicitar nova exportação.",Toast.LENGTH_LONG).show();}
+ }
+ void shareGeneratedVideo(String url){
+  String address=info(url).optString("video_uri","");
+  if(address.isEmpty())return;
+  try{
+   Uri uri=Uri.parse(address);
+   Intent share=new Intent(Intent.ACTION_SEND);
+   share.setType("video/mp4");
+   share.putExtra(Intent.EXTRA_STREAM,uri);
+   share.putExtra(Intent.EXTRA_TEXT,caption(url));
+   share.setClipData(android.content.ClipData.newUri(getContentResolver(),"Vídeo XAND",uri));
+   share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+   startActivity(Intent.createChooser(share,"Enviar MP4 e legenda"));
+  }catch(Exception error){
+   Toast.makeText(this,"Não foi possível compartilhar o MP4.",Toast.LENGTH_LONG).show();
+  }
+ }
  void invokeChatArtScript(String url,JSONObject flow){
   if(prefs.getBoolean("chatgpt_handoff_"+url,false))return;
   JSONObject caption=connectedNode(flow,"action_caption");
@@ -796,7 +884,7 @@ void openPendingStepIfRequested(Intent incoming){
        prefs.edit().putString("metadata",latest.toString())
          .remove("image_generating_"+url).apply();
       }catch(Exception ignored){}
-      show();
+      show();resumePendingVideoExport();
      });
     }).start();
     return;
@@ -971,6 +1059,8 @@ void openPendingStepIfRequested(Intent incoming){
   options.add("Abrir link original");
   if(chatImageSelected()&&!cover)options.add("Executar script no ChatGPT Chat");
   if(cover){options.add("Visualizar arte criada");options.add("Compartilhar arte e legenda");}
+  if(!item.optString("video_uri","").isEmpty())options.add("Compartilhar vídeo MP4 e legenda");
+  if(!item.optString("video_export_issue","").isEmpty())options.add("Tentar exportar vídeo novamente");
   if(legend)options.add("Copiar legenda");
   new AlertDialog.Builder(this).setTitle("Gerenciar link "+(idx+1))
    .setItems(options.toArray(new String[0]),(d,w)->{
@@ -982,6 +1072,8 @@ void openPendingStepIfRequested(Intent incoming){
     else if("Executar script no ChatGPT Chat".equals(chosen))sendArtworkPromptToChatGPT(url,true);
     else if("Visualizar arte criada".equals(chosen))openGeneratedCover(url);
     else if("Compartilhar arte e legenda".equals(chosen))shareGeneratedCover(url);
+    else if("Compartilhar vídeo MP4 e legenda".equals(chosen))shareGeneratedVideo(url);
+    else if("Tentar exportar vídeo novamente".equals(chosen))retryVideoExport(url);
     else if("Copiar legenda".equals(chosen))copyText("Legenda XAND",caption(url));
    }).setNegativeButton("Voltar",null).show();
  }
@@ -1016,7 +1108,10 @@ void openPendingStepIfRequested(Intent incoming){
    String genre=item.optString("genre","").trim();
    if(!genre.isEmpty()){TextView g=label("Estilo: "+genre,12,muted,false);g.setPadding(0,4,0,0);card.addView(g);}
    String state;
-   if(prefs.getBoolean("image_generating_"+url,false))state="Gerando arte original no celular";
+   if(prefs.getBoolean("video_exporting_"+url,false))state="Produzindo MP4 de "+item.optInt("video_duration_seconds",60)+" segundos";
+   else if(!item.optString("video_uri","").isEmpty())state="MP4 e legenda prontos • compartilhar em Gerenciar";
+   else if(!item.optString("video_export_issue","").isEmpty())state="MP4 pendente • tentar novamente em Gerenciar";
+   else if(prefs.getBoolean("image_generating_"+url,false))state="Gerando arte original no celular";
    else if(prefs.getBoolean("chatgpt_handoff_"+url,false)&&item.optString("generated_cover_uri","").isEmpty())state="Aguardando imagem do ChatGPT Chat";
    else if(!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Arte e legenda prontas";
    else if(!item.optString("generated_cover_uri","").isEmpty())state="Arte pronta";
@@ -1051,7 +1146,7 @@ void openPendingStepIfRequested(Intent incoming){
   settings.setPadding(0,24,0,10);root.addView(settings);
   Button flow=action("⚙  Editar fluxo de nós",false);
   flow.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(flow);
-  TextView note=label("Identificação, imagem, logo, duração e produção são configuradas no fluxo. A publicação automática ainda depende da integração com o TikTok.",12,muted,false);
+  TextView note=label("Identificação, imagem, logo, duração e MP4 são processados pelo fluxo. O vídeo não contém áudio; selecione a música no TikTok. Publicação automática ainda requer integração.",12,muted,false);
   note.setPadding(5,6,5,18);root.addView(note);
   if(history.length()>0){
    TextView historyTitle=label("Histórico de resolvidos",18,fg,true);historyTitle.setPadding(0,18,0,12);root.addView(historyTitle);
