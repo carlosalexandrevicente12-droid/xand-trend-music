@@ -20,7 +20,7 @@ aside{padding:15px;border-right:1px solid var(--stroke);background:#111}
 .stage{min-width:0;display:flex;flex-direction:column;background:#0b0b0b}.stagebar{padding:11px 15px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #303030}
 .stagebar label{font-weight:700}.stagebar small{color:#999}
 .viewport{overflow:auto;max-height:65vh;min-height:430px;touch-action:pan-x pan-y}
-.board{position:relative;width:1100px;height:650px;background-color:#0d0d0d;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:22px 22px}
+.board{position:relative;width:1100px;height:820px;background-color:#0d0d0d;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:22px 22px}
 svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflow:visible}
 .node{position:absolute;width:205px;min-height:103px;border:1px solid #545454;border-radius:13px;background:#191919;box-shadow:0 8px 28px #0009;overflow:hidden}
 .node.trigger{border-color:#c97929}.node-header{background:#242424;color:#ffb566;padding:10px 12px;font-weight:900;display:flex;align-items:center;gap:6px;touch-action:none;cursor:grab;user-select:none}
@@ -34,7 +34,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </style></head>
 <body>
 <header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
-<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O modelo conecta oito etapas. Créditos são consultados automaticamente; confirmação, imagem, logo e duração exigem sua escolha. Nada é publicado sozinho.</p></div>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>O modelo conecta oito etapas. Os créditos são consultados automaticamente. Posição da logo e duração são configuradas nestes nós. A confirmação de créditos e a imagem ainda exigem intervenção; a publicação automática não está integrada.</p></div>
 <div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Completar fluxo de criação</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
 <div class="main">
 <aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
@@ -51,8 +51,8 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 </div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
 <section class="stage" aria-label="Quadro de automação">
 <div class="stagebar"><strong style="color:#ffae57">SEU FLUXO DE NÓS</strong><small>Deslize o quadro para os lados para ver as próximas etapas.</small><button id="connect">Conectar nós</button><button id="removeConnections">Remover conexões</button><label class="tog"><input id="enabled" type="checkbox"> Ativa</label><small>O fluxo é executado ao compartilhar um link.</small></div>
-<div class="viewport"><div class="board" id="board"><svg id="wires" viewBox="0 0 1100 650" aria-hidden="true"></svg></div></div>
-<div class="bottom"><button id="test">Verificar fluxo</button><span class="status" id="status" role="status"></span></div>
+<div class="viewport"><div class="board" id="board"><svg id="wires" viewBox="0 0 1100 820" aria-hidden="true"></svg></div></div>
+<div class="bottom"><button id="pending" class="primary">Continuar etapa pendente</button><button id="test">Verificar fluxo</button><span class="status" id="status" role="status"></span></div>
 </section></div>
 <script>
 (() => {
@@ -89,7 +89,29 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
   let options=scriptsAvailable();let placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Selecione um script';select.append(placeholder);
   options.forEach(script=>{let option=document.createElement('option');option.value=script.id;option.textContent=script.name;select.append(option)});
   select.value=n.scriptId||'';select.onclick=e=>e.stopPropagation();select.onchange=e=>{n.scriptId=e.target.value;notify('Script atribuído. Salve o fluxo.')};body.append(select);
- }el.append(head,body);
+ }
+ if(n.type==='action_logo'){
+  const logoButton=document.createElement('button');logoButton.type='button';logoButton.textContent='Registrar logo oficial';logoButton.style.cssText='width:100%;margin:7px 0;font-size:11px';logoButton.onclick=e=>{e.stopPropagation();bridge?.selectLogo();};body.append(logoButton);
+ const label=document.createElement('small');label.textContent='Posição automática';body.append(label);
+  const choice=document.createElement('select');choice.style.cssText='width:100%;font-size:11px';
+  [['rightTop','Superior direita'],['centerTop','Superior centro'],['rightBottom','Inferior direita'],['centerBottom','Inferior centro']].forEach(([value,title])=>{
+    let o=document.createElement('option');o.value=value;o.textContent=title;choice.append(o);
+  });
+  choice.value=n.placement||'rightTop';choice.onclick=e=>e.stopPropagation();
+  choice.onchange=e=>{n.placement=e.target.value;notify('Posição padrão alterada. Salve o fluxo.');};body.append(choice);
+  const size=document.createElement('select');size.style.cssText='width:100%;margin-top:5px;font-size:11px';
+  [25,35,38,45,55].forEach(v=>{let o=document.createElement('option');o.value=String(v);o.textContent='Logo: '+v+'% da largura';size.append(o)});
+  size.value=String(n.logo_width_pct||38);size.onclick=e=>e.stopPropagation();
+  size.onchange=e=>{n.logo_width_pct=Number(size.value);notify('Tamanho padrão alterado. Salve o fluxo.');};body.append(size);
+ }
+ if(n.type==='action_duration'){
+  const label=document.createElement('small');label.textContent='Duração de todas as camadas';body.append(label);
+  const duration=document.createElement('select');duration.style.cssText='width:100%;font-size:11px';
+  [10,15,20,30,45,60,90,120,180].forEach(v=>{let o=document.createElement('option');o.value=String(v);o.textContent=v+' segundos';duration.append(o)});
+  duration.value=String(n.duration_sec||15);duration.onclick=e=>e.stopPropagation();
+  duration.onchange=e=>{n.duration_sec=Number(duration.value);notify('Duração padrão alterada. Salve o fluxo.');};body.append(duration);
+ }
+ el.append(head,body);
  el.onclick=()=>{if(!linking)return;if(!source){source=n.id;el.classList.add('selected');notify('Agora toque no nó de destino.')}else{if(source!==n.id&&!f.edges.some(e=>e.from===source&&e.to===n.id)){f.edges.push({from:source,to:n.id});notify('Conexão criada. Salve os fluxos.')}else notify('Conexão não adicionada.');linking=false;source=null;$('connect').textContent='Conectar nós';show()}};
  let x0,y0,originX,originY,dragging=false;head.addEventListener('pointerdown',ev=>{if(ev.target===remove||linking)return;dragging=true;x0=ev.clientX;y0=ev.clientY;originX=n.x;originY=n.y;head.setPointerCapture(ev.pointerId);ev.preventDefault()});head.addEventListener('pointermove',ev=>{if(!dragging)return;n.x=Math.max(10,Math.min(880,originX+ev.clientX-x0));n.y=Math.max(10,Math.min(520,originY+ev.clientY-y0));el.style.left=n.x+'px';el.style.top=n.y+'px';wires()});head.addEventListener('pointerup',()=>{if(dragging){dragging=false;notify('Posição atualizada. Salve os fluxos.')}});board.append(el)});
  wires();
@@ -138,5 +160,6 @@ $('test').onclick=()=>{try{notify(bridge?.test(JSON.stringify(current()))||'Veri
 try{let saved=JSON.parse(bridge?.load()||'{}');if(Array.isArray(saved.flows))flows=saved.flows.filter(f=>f&&Array.isArray(f.nodes)&&Array.isArray(f.edges))}catch(e){}
 if(!flows.length)flows=[fresh()];
 show();notify('Complete o fluxo de criação ou edite os nós manualmente.');
+$('pending').onclick=()=>notify(bridge?.continuePending()||'Dispositivo indisponível.');
 })();
 </script></body></html>
