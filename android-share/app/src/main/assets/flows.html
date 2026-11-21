@@ -140,11 +140,11 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
   size.onchange=e=>{n.logo_width_pct=Number(size.value);notify('Tamanho padrão alterado. Salve o fluxo.');};body.append(size);
  }
  if(n.type==='action_duration'){
-  const label=document.createElement('small');label.textContent='Duração de todas as camadas';body.append(label);
-  const duration=document.createElement('select');duration.style.cssText='width:100%;font-size:11px';
-  [10,15,20,30,45,60,90,120,180].forEach(v=>{let o=document.createElement('option');o.value=String(v);o.textContent=v+' segundos';duration.append(o)});
-  duration.value=String(n.duration_sec||15);duration.onclick=e=>e.stopPropagation();
-  duration.onchange=e=>{n.duration_sec=Number(duration.value);notify('Duração padrão alterada. Salve o fluxo.');};body.append(duration);
+  const label=document.createElement('small');label.textContent='Duração: 60 a 180 segundos para todas as camadas';body.append(label);
+  const duration=document.createElement('input');duration.type='number';duration.min='60';duration.max='180';duration.step='1';
+  duration.style.cssText='width:100%;font-size:14px';duration.inputMode='numeric';
+  duration.value=String(Math.max(60,Math.min(180,Number(n.duration_sec)||60)));duration.onclick=e=>e.stopPropagation();
+  duration.onchange=e=>{const v=Math.max(60,Math.min(180,Math.round(Number(duration.value)||60)));duration.value=String(v);n.duration_sec=v;notify('Duração de 1 a 3 minutos salva no nó. Salve o fluxo.');};body.append(duration);
  }
  el.append(head,body);
  el.onclick=()=>{if(!linking)return;if(!source){source=n.id;el.classList.add('selected');notify('Agora toque no nó de destino.')}else{if(source!==n.id&&!f.edges.some(e=>e.from===source&&e.to===n.id)){f.edges.push({from:source,to:n.id});notify('Conexão criada. Salve os fluxos.')}else notify('Conexão não adicionada.');linking=false;source=null;$('connect').textContent='Conectar nós';show()}};
