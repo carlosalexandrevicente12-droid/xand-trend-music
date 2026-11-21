@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "XAND Chat — Recuperação",
+  "description": "Vigia conversas do projeto XAND MUSIC no ChatGPT e tenta abrir um novo chat após falhas, sem repetir ações externas.",
+  "version": "0.1.0",
+  "permissions": [
+    "alarms",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Testar recuperação do projeto XAND"
+  }
+}
