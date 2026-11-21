@@ -66,6 +66,21 @@ function mediaInfo(uri) {
     height: Number(row.match(/height=(\d+)/)?.[1] || 0),
   };
 }
+function mediaInfoFromSource(path) {
+  const prefix='/sdcard/Movies/XAND MUSIC/';
+  if (!path.startsWith(prefix) || path.includes('..') || /[\r\n]/.test(path)) throw Error('Arquivo deve estar na pasta XAND MUSIC do Android.');
+  const name=basename(path);
+  if (!/^[a-zA-Z0-9_.-]+\.mp4$/.test(name)) throw Error('Nome de vídeo inválido.');
+  const all=ad('shell','content','query','--uri','content://media/external/video/media','--projection','_display_name:relative_path:_size:duration:width:height');
+  const row=all.split(/\r?\n/).find(line => line.includes('_display_name='+name+',') && line.includes('relative_path=Movies/XAND MUSIC/'));
+  if (!row) throw Error('Vídeo ainda não indexado no MediaStore. Aguarde a leitura do Android.');
+  const size=Number(row.match(/_size=(\d+)/)?.[1] || 0);
+  const duration=Number(row.match(/duration=(\d+)/)?.[1] || 0);
+  const width=Number(row.match(/width=(\d+)/)?.[1] || 0);
+  const height=Number(row.match(/height=(\d+)/)?.[1] || 0);
+  if (!size || !duration || !width || !height) throw Error('Metadados do vídeo incompletos.');
+  return { path, name, size, duration, width, height };
+}
 
 class Chrome {
   constructor(socket) {
@@ -252,11 +267,11 @@ async function download(chrome) {
   return { downloaded: false, reason: 'download_pending', name };
 }
 
-async function waitForResult(chrome, maximumMs = 180000) {
+async function waitForResult(chrome, maximumMs = 180000, previousDownload = null) {
   const stopAt = Date.now() + maximumMs;
   while (Date.now() < stopAt) {
     const s = await state(chrome);
-    if (s.videoReady && s.download?.startsWith('/api/download/')) return { ready: true, status: s.status };
+    if (s.videoReady && s.download?.startsWith('/api/download/') && s.download !== previousDownload) return { ready: true, status: s.status };
     if (!s.processingJob && /erro|falh|cancelad/i.test(s.status || '')) throw Error('Exportação interrompida: ' + s.status);
     await pause(5000);
   }
@@ -271,9 +286,8 @@ async function main() {
   try {
     const target = taskFromQueue();
     const video = options.source
-      ? { path: options.source, name: basename(options.source), size: -1, width: 0, height: 0 }
+      ? mediaInfoFromSource(options.source)
       : target.item.video_uri ? mediaInfo(target.item.video_uri) : null;
-    if (options.source && command === 'upload') throw Error('Para upload, use a fonte verificada do MediaStore da fila.');
     if (command === 'inspect') {
       const s = await state(chrome);
       console.log(JSON.stringify({ command, queueLength: target.queueLength, link: target.url,
@@ -289,10 +303,11 @@ async function main() {
     if (command === 'upload') { console.log(JSON.stringify(await upload(chrome, video), null, 2)); return; }
     if (command === 'prepare') { console.log(JSON.stringify(await prepare(chrome, target, video, {allowMissing:true}), null, 2)); return; }
     if (command === 'run') {
+      const previousDownload=(await state(chrome)).download;
       const transfer = await upload(chrome, video);
       const form = await prepare(chrome, target, video);
-      const submitted = await render(chrome, false);
-      const job = submitted.reason === 'previous_result_exists' ? {ready: true, reused: true} : await waitForResult(chrome);
+      const submitted = await render(chrome, !!transfer.uploaded || !!options.forceRender);
+      const job = submitted.reason === 'previous_result_exists' ? {ready: true, reused: true} : await waitForResult(chrome, 180000, previousDownload);
       const file = job.ready ? await download(chrome) : null;
       console.log(JSON.stringify({link:target.url, transfer, form, render:submitted, job, file,
         review:'logo_position_and_full_video_required', publication:'not_attempted'}, null, 2));
