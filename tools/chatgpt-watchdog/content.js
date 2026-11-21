@@ -42,7 +42,7 @@ function isGenerating() {
 }
 
 function visibleError() {
-  const knownError = /something went wrong|ocorreu um erro|houve um problema|network error|erro de rede|sem resposta do chatgpt\.?\s*verifique sua conex[aã]o/i;
+  const knownError = /something went wrong|ocorreu um erro|houve um problema|network error|erro de rede|sem resposta do chatgpt\.?\s*verifique sua conex[aã]o|conex[aã]o interrompida\.?\s*aguardando a resposta completa/i;
   const alerts = Array.from(document.querySelectorAll(
     '[role="alert"], [role="status"], [data-sonner-toast], [data-testid*="error-message"]'
   ));
@@ -55,7 +55,7 @@ function visibleError() {
   return Array.from(document.querySelectorAll("p, span, small, div")).some((element) =>
     element.children.length === 0 &&
     element.getClientRects().length > 0 &&
-    /^sem resposta do chatgpt\.?\s*verifique sua conex[aã]o\.?$/i.test(
+    /^(?:sem resposta do chatgpt\.?\s*verifique sua conex[aã]o|conex[aã]o interrompida\.?\s*aguardando a resposta completa)\.?$/i.test(
       (element.textContent || "").trim()
     )
   );
