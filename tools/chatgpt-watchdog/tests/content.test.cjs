@@ -118,3 +118,69 @@ test("encontra ultimo pedido na regiao acessivel quando nao ha atributo de autor
   vm.runInContext(contentScript, context);
   assert.equal(vm.runInContext("latestUserText()", context), "TESTE XAND: mensagem pendente");
 });
+
+async function attemptHandoffWithDraft(existing) {
+  const marker = "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC";
+  const payload = marker + " / CAPAS TIKTOK.\nNovo pedido: teste fictício.";
+  let inserted = null;
+  let clicks = 0;
+  let selections = 0;
+  const editor = {
+    innerText: existing,
+    textContent: existing,
+    focus() {}
+  };
+  const sendButton = {
+    disabled: false,
+    type: "button",
+    textContent: "",
+    className: "",
+    getAttribute: (key) => key === "aria-label" ? "Enviar" : null,
+    click() { clicks++; editor.innerText = ""; editor.textContent = ""; }
+  };
+  const context = {
+    payload,
+    setTimeout,
+    document: {
+      addEventListener: () => {},
+      querySelector: (selector) => selector.includes("#prompt-textarea") ? editor : null,
+      querySelectorAll: (selector) => selector === "button" ? [sendButton] : [],
+      createRange: () => ({ selectNodeContents() { selections++; } }),
+      execCommand: (_command, _showUI, text) => {
+        inserted = text;
+        editor.innerText = text;
+        editor.textContent = text;
+        return true;
+      }
+    },
+    window: {
+      getSelection: () => ({ removeAllRanges() {}, addRange() {} })
+    },
+    chrome: { runtime: { onMessage: { addListener: () => {} } } },
+    location: {
+      origin: "https://chatgpt.com",
+      pathname: "/g/g-p-6b0182d2a7a0819183158c736eb617ed/project"
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(contentScript, context);
+  const result = await vm.runInContext("insertHandoff(payload)", context);
+  return { result, inserted, clicks, selections, existing };
+}
+
+test("substitui somente rascunho antigo da propria recuperacao", async () => {
+  const r = await attemptHandoffWithDraft(
+    "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC / CAPAS TIKTOK.\nPedido antigo."
+  );
+  assert.equal(r.result.submitted, true);
+  assert.match(r.inserted, /Novo pedido: teste fictício/);
+  assert.equal(r.selections, 1);
+  assert.equal(r.clicks, 1);
+});
+
+test("preserva rascunho escrito pelo usuario e bloqueia envio", async () => {
+  const r = await attemptHandoffWithDraft("Meu texto de trabalho ainda não enviado");
+  assert.equal(r.result.submitted, false);
+  assert.equal(r.inserted, null);
+  assert.equal(r.clicks, 0);
+});
