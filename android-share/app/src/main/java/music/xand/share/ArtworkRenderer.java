@@ -29,6 +29,12 @@ public final class ArtworkRenderer {
 
   public static void export(Context context, Uri backgroundUri, Uri logoUri,
       String title, String artist, String genre, String logoPosition, OutputStream stream) throws IOException {
+    export(context,backgroundUri,logoUri,title,artist,genre,logoPosition,-1,-1,-1,stream);
+  }
+
+  public static void export(Context context, Uri backgroundUri, Uri logoUri,
+      String title, String artist, String genre, String logoPosition,
+      int logoXPercent, int logoYPercent, int logoWidthPercent, OutputStream stream) throws IOException {
     if (title == null || title.trim().isEmpty() || artist == null || artist.trim().isEmpty())
       throw new IOException("Informe o nome da música e do artista antes de exportar.");
     if (backgroundUri == null || logoUri == null)
@@ -44,7 +50,7 @@ public final class ArtworkRenderer {
       canvas.drawColor(Color.rgb(9,9,9));
       drawFit(canvas, background, new RectF(0,0,WIDTH,HEIGHT));
       drawFooter(canvas, title.trim(), artist.trim(), genre == null ? "" : genre.trim());
-      drawLogo(canvas, logo, logoPosition);
+      drawLogo(canvas, logo, logoPosition, logoXPercent, logoYPercent, logoWidthPercent);
       if (!output.compress(Bitmap.CompressFormat.PNG, 100, stream))
         throw new IOException("Falha ao codificar a arte em PNG.");
       stream.flush();
@@ -173,21 +179,36 @@ public final class ArtworkRenderer {
     } finally {if(preview!=original)original.recycle();}
   }
 
-  private static void drawLogo(Canvas canvas, Bitmap logo, String position) throws IOException {
-    boolean top=position==null || position.startsWith("Superior");
-    boolean centered=position!=null && position.endsWith("centro");
-    float left=centered?330:WIDTH-86-420;
-    float y=top?85:1020;
-    RectF space=new RectF(left,y,left+420,y+225);
+  /** Uses percentages of the final 1080x1920 canvas, without cropping visible logo pixels. */
+  private static void drawLogo(Canvas canvas, Bitmap logo, String position,
+      int centerXPercent,int centerYPercent,int widthPercent) throws IOException {
     Rect src=visibleLogoBounds(logo);
-    float scale=Math.min(space.width()/src.width(),space.height()/src.height());
-    float width=src.width()*scale,height=src.height()*scale;
-    RectF fitted=new RectF(space.centerX()-width/2,space.centerY()-height/2,
-      space.centerX()+width/2,space.centerY()+height/2);
+    RectF fitted;
+    if(centerXPercent>=0&&centerYPercent>=0&&widthPercent>=0){
+      float desiredWidth=WIDTH*Math.max(15,Math.min(80,widthPercent))/100f;
+      float scale=Math.min(desiredWidth/src.width(),HEIGHT*.48f/src.height());
+      float width=src.width()*scale,height=src.height()*scale;
+      float x=WIDTH*Math.max(0,Math.min(100,centerXPercent))/100f;
+      float y=HEIGHT*Math.max(0,Math.min(100,centerYPercent))/100f;
+      float left=Math.max(18,Math.min(WIDTH-width-18,x-width/2f));
+      float top=Math.max(18,Math.min(HEIGHT-height-18,y-height/2f));
+      fitted=new RectF(left,top,left+width,top+height);
+    }else{
+      boolean top=position==null || position.startsWith("Superior");
+      boolean centered=position!=null && position.endsWith("centro");
+      float left=centered?330:WIDTH-86-420;
+      float y=top?85:1020;
+      RectF space=new RectF(left,y,left+420,y+225);
+      float scale=Math.min(space.width()/src.width(),space.height()/src.height());
+      float width=src.width()*scale,height=src.height()*scale;
+      fitted=new RectF(space.centerX()-width/2,space.centerY()-height/2,
+        space.centerX()+width/2,space.centerY()+height/2);
+    }
     Paint back=new Paint(Paint.ANTI_ALIAS_FLAG);
     back.setColor(Color.argb(145,0,0,0));
     canvas.drawRoundRect(new RectF(fitted.left-20,fitted.top-14,fitted.right+20,fitted.bottom+14),16,16,back);
     Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
     canvas.drawBitmap(logo,src,fitted,paint);
   }
+
 }
