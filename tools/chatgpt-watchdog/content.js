@@ -141,7 +141,7 @@ async function insertHandoff(text) {
   // A previous recovery may have left a stale draft at the project home.
   // Replace only our own recovery draft; never overwrite an unrelated user draft.
   const currentText = () => String(editor.innerText || editor.textContent || "");
-  const normalize = (value) => String(value).replace(/\\s+/g, " ").trim();
+  const normalize = (value) => String(value).replace(/\s+/g, " ").trim();
   const existing = currentText();
   if (existing.trim() && !existing.trim().startsWith(marker)) {
     return { submitted: false, drafted: true, reason: "unrelated user draft preserved" };
