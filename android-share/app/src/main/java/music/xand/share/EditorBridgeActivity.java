@@ -21,6 +21,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -33,6 +34,7 @@ public final class EditorBridgeActivity extends Activity {
   private TextView connection,status,details;
   private Button open;
   private Spinner style;
+  private CheckBox branded;
   private final Handler main=new Handler(Looper.getMainLooper());
   private boolean reachable=false;
   private final int ORANGE=Color.rgb(255,133,0);
@@ -61,6 +63,32 @@ public final class EditorBridgeActivity extends Activity {
   private JSONObject item(){
     try{return new JSONObject(prefs.getString("metadata","{}")).optJSONObject(musicUrl);}
     catch(Exception ignored){return null;}
+  }
+  /** Covers rendered by this automation already have song/artist/logo in their pixels. */
+  private boolean hasEmbeddedBranding(JSONObject data){
+    if(data==null)return false;
+    if(data.has("editor_source_has_branding"))return data.optBoolean("editor_source_has_branding",false);
+    String cover=data.optString("generated_cover_uri","");
+    return !cover.isEmpty()&&cover.equals(data.optString("video_render_cover_uri",""));
+  }
+  private String overlayHelp(boolean embedded){
+    return embedded?
+      "Arte pronta detectada: NÃO duplicar créditos nem logo. No editor, deixe vazios 'Título da arte' e 'Música e artista'. A imagem/vídeo de origem permanece intacta. Confira a prévia antes de usar.":
+      "Fonte sem créditos confirmados: o editor pode adicionar título e artista; confira a posição e mantenha uma única logo original.";
+  }
+  private void persistOverlayPlan(boolean embedded){
+    try{
+      JSONObject all=new JSONObject(prefs.getString("metadata","{}"));
+      JSONObject data=all.optJSONObject(musicUrl);if(data==null)data=new JSONObject();
+      data.put("editor_source_has_branding",embedded);
+      data.put("editor_overlay_mode",embedded?"keep_embedded":"add_if_missing");
+      data.put("editor_requested_title",embedded?"":data.optString("song",""));
+      data.put("editor_requested_subtitle",embedded?"":data.optString("song","")+" — "+data.optString("artist",""));
+      data.put("editor_requested_logo",embedded?"preserve_embedded":"original_if_missing");
+      data.put("editor_visual_review_status","pending");
+      all.put(musicUrl,data);
+      prefs.edit().putString("metadata",all.toString()).apply();
+    }catch(Exception ignored){}
   }
   private void updateMeta(String key,Object value){
     try{
@@ -96,6 +124,19 @@ public final class EditorBridgeActivity extends Activity {
       String last=prefs.getString("editor_last_completed_style","");
       style.setSelection("video".equals(last)?1:0);
     }
+    branded=new CheckBox(this);
+    branded.setText("A arte já contém música, artista e logo");
+    branded.setTextColor(Color.WHITE);
+    branded.setButtonTintList(ColorStateList.valueOf(ORANGE));
+    branded.setPadding(0,dp(14),0,dp(8));
+    branded.setChecked(hasEmbeddedBranding(data));
+    root.addView(branded);
+    TextView overlayNote=text(overlayHelp(branded.isChecked()),13,Color.LTGRAY);
+    root.addView(overlayNote);
+    branded.setOnCheckedChangeListener((b,checked)->{
+      overlayNote.setText(overlayHelp(checked));
+      persistOverlayPlan(checked);
+    });
     open=button("Abrir XAND MUSIC Editor no Chrome");open.setEnabled(false);
     LinearLayout.LayoutParams wide=new LinearLayout.LayoutParams(-1,dp(52));wide.topMargin=dp(12);root.addView(open,wide);
     open.setOnClickListener(v->openEditor());
@@ -138,6 +179,7 @@ public final class EditorBridgeActivity extends Activity {
   private void openEditor(){
     if(!reachable)return;
     String requested=style.getSelectedItemPosition()==1?"splitfade":"video";
+    persistOverlayPlan(branded.isChecked());
     updateMeta("editor_requested_style",requested);
     updateMeta("editor_job_status","waiting_editor_session");
     updateMeta("editor_started_at",System.currentTimeMillis());
@@ -197,6 +239,20 @@ public final class EditorBridgeActivity extends Activity {
       }catch(Exception ignored){}
       JSONObject all=new JSONObject(prefs.getString("metadata","{}"));
       JSONObject item=all.optJSONObject(musicUrl);if(item==null)item=new JSONObject();
+      String oldUri=item.optString("editor_video_uri","");
+      if(!oldUri.isEmpty()&&!oldUri.equals(file.toString())){
+        JSONArray history=item.optJSONArray("editor_export_history");
+        if(history==null)history=new JSONArray();
+        JSONObject previous=new JSONObject();
+        previous.put("uri",oldUri);
+        previous.put("name",item.optString("editor_video_name",""));
+        previous.put("duration_ms",item.optLong("editor_video_duration_ms",0));
+        previous.put("size_bytes",item.optLong("editor_video_size_bytes",0));
+        previous.put("review_status",item.optString("editor_visual_review_status","pending"));
+        history.put(previous);
+        item.put("editor_export_history",history);
+      }
+      item.put("editor_export_source_branding",hasEmbeddedBranding(item));
       item.put("editor_video_uri",file.toString());item.put("editor_video_name",filename);
       item.put("editor_video_duration_ms",ms);item.put("editor_video_size_bytes",bytes);
       item.put("editor_downloads_verified",downloads);
