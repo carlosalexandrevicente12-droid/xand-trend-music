@@ -15,6 +15,7 @@ import java.util.regex.*;
 
 public class MainActivity extends Activity {
  SharedPreferences prefs; LinearLayout root;
+ final java.util.Set<String> coversInProgress=java.util.Collections.synchronizedSet(new java.util.HashSet<>());
  String pendingImageUrl="",pendingExportUrl="",pendingLogoUrl="";
  boolean shareIntentHandled=false;
  void clearConsumedShareIntent(){Intent safe=new Intent(this,MainActivity.class);safe.setAction(Intent.ACTION_MAIN);safe.addCategory(Intent.CATEGORY_LAUNCHER);setIntent(safe);}
@@ -23,7 +24,7 @@ public class MainActivity extends Activity {
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
  void openPendingStepIfRequested(Intent incoming){
@@ -484,7 +485,8 @@ public class MainActivity extends Activity {
  boolean hasImageAfterReview(){return hasConnectedStep("action_review","action_image");}
  void completeReview(String url){
   if(needsMetadata(url))return;
-  prefs.edit().remove("review_pending_"+url).apply();
+  prefs.edit().remove("review_pending_"+url).putBoolean("review_confirmed_"+url,true).apply();
+  if(hasAutomaticImageNode()){continueCreativeAutomation(url);show();return;}
   if(hasImageAfterReview()&&info(url).optString("image_uri","").isEmpty()){
    prefs.edit().putBoolean("image_pending_"+url,true).apply();
    show();imageOptions(url);
@@ -527,7 +529,140 @@ public class MainActivity extends Activity {
    if(changed){all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();}
   }catch(Exception ignored){}
  }
+
+ JSONObject connectedNode(JSONObject flow,String expectedType){
+  JSONArray nodes=flow.optJSONArray("nodes"),edges=flow.optJSONArray("edges");
+  if(nodes==null||edges==null)return null;
+  java.util.HashMap<String,JSONObject> byId=new java.util.HashMap<>();
+  java.util.ArrayDeque<String> pending=new java.util.ArrayDeque<>();
+  java.util.HashSet<String> visited=new java.util.HashSet<>();
+  for(int i=0;i<nodes.length();i++){
+   JSONObject node=nodes.optJSONObject(i);if(node==null)continue;
+   String id=node.optString("id");if(id.isEmpty())continue;
+   byId.put(id,node);
+   if("trigger_share".equals(node.optString("type")))pending.add(id);
+  }
+  int limit=0;
+  while(!pending.isEmpty()&&limit++<80){
+   String id=pending.removeFirst();if(!visited.add(id))continue;
+   JSONObject node=byId.get(id);if(node==null)continue;
+   if(expectedType.equals(node.optString("type")))return node;
+   for(int e=0;e<edges.length();e++){
+    JSONObject edge=edges.optJSONObject(e);
+    if(edge!=null&&id.equals(edge.optString("from"))&&byId.containsKey(edge.optString("to")))
+     pending.addLast(edge.optString("to"));
+   }
+  }
+  return null;
+ }
+ boolean hasAutomaticImageNode(){
+  try{
+   JSONArray flows=new JSONObject(prefs.getString("workflows_v1","{}")).optJSONArray("flows");
+   if(flows==null)return false;
+   for(int i=0;i<flows.length();i++){
+    JSONObject flow=flows.optJSONObject(i);
+    if(flow==null||!flow.optBoolean("enabled",false))continue;
+    JSONObject node=connectedNode(flow,"action_image");
+    if(node!=null&&"generated_local".equals(node.optString("image_source","generated_local")))return true;
+   }
+  }catch(Exception ignored){}
+  return false;
+ }
+ boolean isQueuedLink(String url){
+  JSONArray items=load();for(int i=0;i<items.length();i++)if(url.equals(items.optString(i)))return true;
+  return false;
+ }
+ void continueCreativeAutomation(String url){
+  if(!isQueuedLink(url))return;
+  try{
+   JSONArray flows=new JSONObject(prefs.getString("workflows_v1","{}")).optJSONArray("flows");
+   if(flows==null)return;
+   for(int i=0;i<flows.length();i++){
+    JSONObject flow=flows.optJSONObject(i);
+    if(flow==null||!flow.optBoolean("enabled",false))continue;
+    JSONObject review=connectedNode(flow,"action_review");
+    JSONObject image=connectedNode(flow,"action_image");
+    JSONObject captionNode=connectedNode(flow,"action_caption");
+    if(image==null&&captionNode==null)continue;
+    JSONObject item=info(url);
+    String song=item.optString("song","").trim(),artist=item.optString("artist","").trim();
+    if(song.isEmpty()||artist.isEmpty())return; // Sem credenciais inventadas.
+    boolean confirmed=prefs.getBoolean("review_confirmed_"+url,false);
+    boolean verified="identified".equals(item.optString("recognition_status"));
+    if(review!=null){
+     String mode=review.optString("review_mode","auto_verified");
+     if("manual".equals(mode)&&!confirmed)return;
+     if(!verified&&!confirmed)return;
+     prefs.edit().remove("review_pending_"+url).apply();
+    }else if(!verified&&!confirmed)return;
+    JSONObject all=metadata();
+    item=all.optJSONObject(url);if(item==null)item=new JSONObject();
+    long seed=CreativeAutomation.seed(url);
+    if(captionNode!=null&&!item.has("caption_user")){
+     String caption=CreativeAutomation.caption(song,artist,item.optString("genre",""),
+       captionNode.optString("caption_mode","engagement"),seed);
+     item.put("caption_auto",caption);item.put("caption_generation","local_template");
+    }
+    all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
+    if(image==null)return;
+    if(!"generated_local".equals(image.optString("image_source","generated_local")))return;
+    if(!item.optString("generated_cover_uri","").isEmpty()||
+       !item.optString("image_uri","").isEmpty()){
+     prefs.edit().remove("image_pending_"+url).remove("image_generating_"+url).apply();
+     return;
+    }
+    String logo=prefs.getString("logo_uri","");
+    if(logo.isEmpty()){
+     item.put("generation_issue","Registre a logo original no nó Posicionar logo.");
+     all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
+     prefs.edit().putBoolean("image_pending_"+url,true).apply();return;
+    }
+    if(!coversInProgress.add(url))return;
+    String artStyle=image.optString("art_style","auto");
+    final String title=song,performer=artist,genre=item.optString("genre","");
+    final int lx=item.optInt("logo_x_pct",73),ly=item.optInt("logo_y_pct",12),
+      lw=item.optInt("logo_width_pct",38);
+    prefs.edit().putBoolean("image_generating_"+url,true).apply();
+    new Thread(()->{
+     Uri result=null;String error=null;
+     try{
+      result=CreativeAutomation.saveCover(this,Uri.parse(logo),title,performer,genre,
+        artStyle,seed,lx,ly,lw);
+     }catch(Exception failure){error=failure.getMessage();}
+     final Uri finished=result;
+     final String failure=error;
+     runOnUiThread(()->{
+      coversInProgress.remove(url);
+      try{
+       JSONObject latest=metadata();JSONObject updated=latest.optJSONObject(url);
+       if(updated==null)updated=new JSONObject();
+       if(finished!=null){
+        updated.put("generated_cover_uri",finished.toString());
+        updated.put("generated_cover_source","generated_local");
+        updated.put("generated_cover_style",artStyle);
+        updated.remove("generation_issue");
+        prefs.edit().remove("image_pending_"+url).remove("logo_pending_"+url)
+          .remove("duration_pending_"+url).apply();
+       }else{
+        updated.put("generation_issue",failure==null?"Falha na geração da arte.":failure);
+        prefs.edit().putBoolean("image_pending_"+url,true).apply();
+       }
+       latest.put(url,updated);
+       prefs.edit().putString("metadata",latest.toString())
+         .remove("image_generating_"+url).apply();
+      }catch(Exception ignored){}
+      show();
+     });
+    }).start();
+    return;
+   }
+  }catch(Exception failure){
+   Toast.makeText(this,"Não foi possível executar a criação automática.",Toast.LENGTH_SHORT).show();
+  }
+ }
+
  boolean runShareFlows(String url){
+  CreativeAutomation.ensureWorkflow(prefs);
   boolean identifiedByNode=false;
   try{
    JSONObject saved=new JSONObject(prefs.getString("workflows_v1","{}"));
@@ -548,14 +683,13 @@ public class MainActivity extends Activity {
      if("action_notify".equals(type))Toast.makeText(this,"XAND: link recebido pela automação.",Toast.LENGTH_SHORT).show();
      else if("action_identify".equals(type)){identifiedByNode=true;identifySong(url,false);}
      else if("action_review".equals(type)){
-      prefs.edit().putBoolean("review_pending_"+url,true).putBoolean("selected_"+url,true).apply();
-      Toast.makeText(this,"Confira música e artista no passo 1 para continuar.",Toast.LENGTH_LONG).show();
-      continue; // A confirmação humana é obrigatória antes de prosseguir.
+      prefs.edit().putBoolean("review_pending_"+url,true).apply();
+      // Em modo automático aguarda a consulta pública, sem solicitar ação antecipada.
+      continue;
      }
      else if("action_image".equals(type)){
-      prefs.edit().putBoolean("image_pending_"+url,true).putBoolean("selected_"+url,true).apply();
-      Toast.makeText(this,"Escolha a imagem e a logo no passo 2.",Toast.LENGTH_LONG).show();
-      continue;
+      prefs.edit().putBoolean("image_pending_"+url,true).apply();
+      continue; // A etapa automática continua após confirmar os créditos.
      }
      else if("action_logo".equals(type)){
       if(!info(url).has("logo_x_pct")){prefs.edit().putBoolean("logo_pending_"+url,true).apply();continue;}
@@ -563,6 +697,7 @@ public class MainActivity extends Activity {
      else if("action_duration".equals(type)){
       if(!info(url).has("video_duration_seconds")){prefs.edit().putBoolean("duration_pending_"+url,true).apply();continue;}
      }
+     else if("action_caption".equals(type))continueCreativeAutomation(url);
      else if("action_copy".equals(type))((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("TikTok",url));
      else if("action_open".equals(type))open(url);
      else if("action_script".equals(type))ScriptExecutor.run(this,prefs,assignedScripts.getOrDefault(current,""),url);
@@ -604,6 +739,7 @@ public class MainActivity extends Activity {
      item.put("recognition_url",result.canonical);
      item.put("sound_hint",result.soundHint);
      all.put(url,item);prefs.edit().putString("metadata",all.toString()).apply();
+     continueCreativeAutomation(url);
      show();
     }catch(Exception e){Toast.makeText(this,"Não foi possível salvar a consulta.",Toast.LENGTH_SHORT).show();}
     if(!interactive)return;
@@ -624,7 +760,7 @@ public class MainActivity extends Activity {
  void copyText(String title,String value){((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText(title,value));Toast.makeText(this,"Copiado.",Toast.LENGTH_SHORT).show();}
  void shareText(String title,String value){Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,value);startActivity(Intent.createChooser(send,title));}
  boolean needsMetadata(String url){JSONObject x=info(url);if(x.optString("song","").trim().isEmpty()||x.optString("artist","").trim().isEmpty()){Toast.makeText(this,"Preencha música e artista primeiro.",Toast.LENGTH_LONG).show();edit(url);return true;}return false;}
- String caption(String url){JSONObject x=info(url);String song=field(x,"song","Música não identificada"),artist=field(x,"artist","Artista não identificado"),genre=x.optString("genre","").trim();String result="🎵 "+song+" — "+artist;if(!genre.isEmpty())result+="\n🎧 Estilo: "+genre;return result+"\n\nQual sua parte favorita? 🎶\n\n#XANDMUSIC #TikTokMusic";}
+ String caption(String url){JSONObject x=info(url);String generated=x.optString("caption_auto","");if(!generated.isEmpty())return generated;String song=field(x,"song","Música não identificada"),artist=field(x,"artist","Artista não identificado"),genre=x.optString("genre","").trim();String result="🎵 "+song+" — "+artist;if(!genre.isEmpty())result+="\n🎧 Estilo: "+genre;return result+"\n\nQual sua parte favorita? 🎶\n\n#XANDMUSIC #TikTokMusic";}
  void prepareCaption(String url){if(needsMetadata(url))return;EditText input=new EditText(this);input.setText(caption(url));input.setMinLines(5);input.setGravity(android.view.Gravity.TOP);LinearLayout layout=new LinearLayout(this);layout.setPadding(28,12,28,0);layout.addView(input,new LinearLayout.LayoutParams(-1,-2));new AlertDialog.Builder(this).setTitle("Legenda para o TikTok").setView(layout).setNegativeButton("Voltar",null).setNeutralButton("Copiar",(d,w)->copyText("Legenda XAND",input.getText().toString())).setPositiveButton("Compartilhar",(d,w)->shareText("Enviar legenda",input.getText().toString())).show();}
  void pinterest(String url){if(needsMetadata(url))return;JSONObject x=info(url);String query=field(x,"song","")+" "+field(x,"artist","")+" "+field(x,"genre","")+" music cover art";open("https://www.pinterest.com/search/pins/?q="+Uri.encode(query.trim()));}
  void prepareArtwork(String url){if(needsMetadata(url))return;JSONObject x=info(url);String song=field(x,"song",""),artist=field(x,"artist",""),genre=field(x,"genre","estilo ainda não confirmado");String prompt="Crie uma arte vertical 9:16 para o perfil XAND MUSIC. Música: "+song+". Artista: "+artist+". Estilo: "+genre+". A imagem deve se inspirar na atmosfera da música, nunca em capturas de tela do TikTok. Incluir nome da música, artista, estilo e meu logotipo oficial XAND MUSIC completo, sem cortar ou alterar. Se eu ainda não tiver enviado a logo, peça o arquivo original antes de finalizar. Evite imagens repetidas, excesso de efeitos artificiais e padrões genéricos. Respeite os direitos de uso de imagens de terceiros. Gere uma proposta visual original.";shareText("Enviar instruções ao ChatGPT",prompt);}
@@ -652,16 +788,53 @@ public class MainActivity extends Activity {
     save(next);show();
    }).show();
  }
+ void openGeneratedCover(String url){
+  String uri=info(url).optString("generated_cover_uri","");
+  if(uri.isEmpty())return;
+  try{
+   Intent view=new Intent(Intent.ACTION_VIEW);
+   view.setDataAndType(Uri.parse(uri),"image/png");
+   view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+   startActivity(Intent.createChooser(view,"Visualizar arte XAND"));
+  }catch(Exception ex){Toast.makeText(this,"Não foi possível abrir a arte.",Toast.LENGTH_LONG).show();}
+ }
+ void shareGeneratedCover(String url){
+  JSONObject item=info(url);
+  String uri=item.optString("generated_cover_uri","");
+  if(uri.isEmpty())return;
+  try{
+   Uri cover=Uri.parse(uri);
+   Intent send=new Intent(Intent.ACTION_SEND);
+   send.setType("image/png");
+   send.putExtra(Intent.EXTRA_STREAM,cover);
+   send.putExtra(Intent.EXTRA_TEXT,caption(url));
+   send.setClipData(android.content.ClipData.newUri(getContentResolver(),"Arte XAND",cover));
+   send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+   startActivity(Intent.createChooser(send,"Enviar arte e legenda"));
+  }catch(Exception ex){Toast.makeText(this,"Falha ao compartilhar a arte.",Toast.LENGTH_LONG).show();}
+ }
  void manageQueueItem(int idx){
   JSONArray items=load();if(idx<0||idx>=items.length())return;
-  String[] options={"Mover uma posição para cima","Mover uma posição para baixo","Remover da fila","Abrir link original"};
   String url=items.optString(idx);
+  JSONObject item=info(url);
+  boolean cover=!item.optString("generated_cover_uri","").isEmpty();
+  boolean legend=!item.optString("caption_auto","").isEmpty();
+  java.util.ArrayList<String> options=new java.util.ArrayList<>();
+  options.add("Mover uma posição para cima");
+  options.add("Mover uma posição para baixo");
+  options.add("Remover da fila");
+  options.add("Abrir link original");
+  if(cover){options.add("Visualizar arte criada");options.add("Compartilhar arte e legenda");}
+  if(legend)options.add("Copiar legenda");
   new AlertDialog.Builder(this).setTitle("Gerenciar link "+(idx+1))
-   .setItems(options,(d,w)->{
+   .setItems(options.toArray(new String[0]),(d,w)->{
     if(w==0)moveInQueue(idx,-1);
     else if(w==1)moveInQueue(idx,1);
     else if(w==2)removeFromQueue(idx);
-    else open(url);
+    else if(w==3)open(url);
+    else if(cover&&w==4)openGeneratedCover(url);
+    else if(cover&&w==5)shareGeneratedCover(url);
+    else copyText("Legenda XAND",caption(url));
    }).setNegativeButton("Voltar",null).show();
  }
  void show(){
@@ -695,7 +868,11 @@ public class MainActivity extends Activity {
    String genre=item.optString("genre","").trim();
    if(!genre.isEmpty()){TextView g=label("Estilo: "+genre,12,muted,false);g.setPadding(0,4,0,0);card.addView(g);}
    String state;
-   if(prefs.getBoolean("review_pending_"+url,false))state="Identificação aguardando confirmação";
+   if(prefs.getBoolean("image_generating_"+url,false))state="Gerando arte original no celular";
+   else if(!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Arte e legenda prontas";
+   else if(!item.optString("generated_cover_uri","").isEmpty())state="Arte pronta";
+   else if(!item.optString("caption_auto","").isEmpty()&&!item.optString("generation_issue","").isEmpty())state="Legenda pronta • confira a logo no fluxo";
+   else if(prefs.getBoolean("review_pending_"+url,false))state="Identificação aguardando confirmação";
    else if(prefs.getBoolean("image_pending_"+url,false))state="Aguardando criação da imagem";
    else if(prefs.getBoolean("logo_pending_"+url,false))state="Aguardando composição da arte";
    else if(prefs.getBoolean("duration_pending_"+url,false))state="Aguardando renderização do vídeo";
