@@ -55,6 +55,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         lastProgressAt: Date.now(),
         assistantCount: Number(message.assistantCount || 0),
         signature: String(message.signature || ""),
+        // Temporary, per-browser-session context; no persistent chat transcript.
+        userText: String(message.userText || "").trim().slice(0, 1400),
+        previousAssistantText: String(message.previousAssistantText || "").trim().slice(-650),
         attempted: false,
         urlAtSubmit: sender.tab.url
       });
@@ -100,7 +103,16 @@ async function recover(tabId, reason, testOnly = false, probe = null) {
     await sessionSet(key, { ...pending, attempted: true, attemptedAt: Date.now() });
   }
   const data = probe || await probeTab(tabId) || {};
-  const lastUserText = String(data.lastUserText || "").slice(0, 900);
+  const lastUserText = String(pending?.userText || data.lastUserText || "").trim().slice(0, 1400);
+  const previousAssistantText = String(
+    pending?.previousAssistantText || data.lastAssistantText || ""
+  ).trim().slice(-650);
+  const reasonLabel = {
+    "visible-error": "erro visível no ChatGPT",
+    "no-response": "mensagem sem resposta",
+    "stalled-stream": "resposta interrompida",
+    "manual-test": "teste manual"
+  }[reason] || "falha observada";
   const originalUrl = original.url;
   const handoff = [
     "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC / CAPAS TIKTOK.",
@@ -109,7 +121,13 @@ async function recover(tabId, reason, testOnly = false, probe = null) {
       : "O chat anterior ficou sem resposta ou apresentou erro. Retome somente o que ficou pendente.",
     "Projeto: XAND MUSIC - Capas TikTok. Trabalhe exclusivamente no modo Chat.",
     "Chat anterior: " + originalUrl,
-    lastUserText ? "Último pedido (trecho): " + lastUserText : "",
+    "Sinal detectado: " + reasonLabel + ". O monitor não confirma que a tarefa anterior falhou.",
+    lastUserText
+      ? "Último pedido registrado antes do envio (trecho): " + lastUserText
+      : "Último pedido não recuperado. Consulte o projeto ou peça o trecho necessário ao usuário.",
+    previousAssistantText
+      ? "Trecho da resposta anterior (pode não refletir o estado atual): " + previousAssistantText
+      : "",
     "Consulte as instruções, a memória e as Fontes do projeto. Verifique o estado real antes de executar.",
     "NÃO repita publicações, envios, exclusões, alterações no GitHub ou outras ações externas sem verificar se já ocorreram.",
     "Preserve tudo; diga qual etapa pode continuar e qual depende de confirmação."
