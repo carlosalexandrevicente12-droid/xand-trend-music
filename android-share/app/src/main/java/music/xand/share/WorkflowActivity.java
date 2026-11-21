@@ -18,6 +18,7 @@ public class WorkflowActivity extends Activity {
   @Override public void onCreate(Bundle state) {
     super.onCreate(state);
     prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);
+    CreativeAutomation.ensureWorkflow(prefs);
     editor=new WebView(this);
     editor.getSettings().setJavaScriptEnabled(true);
     editor.getSettings().setDomStorageEnabled(true);
@@ -41,6 +42,12 @@ public class WorkflowActivity extends Activity {
           else if(prefs.getBoolean("image_pending_"+url,false))stage="image";
           else if(prefs.getBoolean("logo_pending_"+url,false))stage="logo";
           else if(prefs.getBoolean("duration_pending_"+url,false))stage="duration";
+          if(stage.isEmpty()){
+            JSONObject all=new JSONObject(prefs.getString("metadata","{}"));
+            JSONObject item=all.optJSONObject(url);
+            if(item==null||item.optString("song").trim().isEmpty()||
+               item.optString("artist").trim().isEmpty())stage="review";
+          }
           if(!stage.isEmpty()){
             final String target=url,step=stage;
             runOnUiThread(()->{Intent intent=new Intent(WorkflowActivity.this,MainActivity.class);intent.putExtra("xand_pending_url",target);intent.putExtra("xand_pending_stage",step);startActivity(intent);});
