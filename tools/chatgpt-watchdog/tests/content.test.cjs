@@ -56,3 +56,22 @@ test("mantem reconhecimento dos erros de rede anteriores", () => {
   assert.equal(detected({ alerts: [element("Network error")] }), true);
   assert.equal(detected({ alerts: [element("Tudo funcionando")] }), false);
 });
+
+test("reconhece botao Enviar sem atributo type=submit", () => {
+  const context = {
+    document: { addEventListener: () => {} },
+    chrome: { runtime: { onMessage: { addListener: () => {} } } },
+    location: { origin: "https://chatgpt.com", pathname: "/g/test/project" }
+  };
+  vm.createContext(context);
+  vm.runInContext(contentScript, context);
+  const isSendButton = vm.runInContext("isSendButton", context);
+  const button = (attributes) => ({
+    type: "button",
+    textContent: "",
+    getAttribute: (key) => attributes[key] || null
+  });
+  assert.equal(isSendButton(button({ "aria-label": "Enviar mensagem" })), true);
+  assert.equal(isSendButton(button({ "data-tooltip": "Enviar" })), true);
+  assert.equal(isSendButton(button({ "aria-label": "Fechar" })), false);
+});
