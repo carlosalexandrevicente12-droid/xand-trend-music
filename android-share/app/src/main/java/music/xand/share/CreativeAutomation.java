@@ -18,12 +18,36 @@ import java.util.Locale;
 final class CreativeAutomation {
   private CreativeAutomation(){}
 
+  static String ensureChatScript(SharedPreferences prefs){
+    final String id="xand_chatgpt_art_script_v1";
+    try{
+      JSONObject root=new JSONObject(prefs.getString("scripts_v1","{}"));
+      JSONArray scripts=root.optJSONArray("scripts");
+      if(scripts==null){scripts=new JSONArray();root.put("scripts",scripts);}
+      for(int i=0;i<scripts.length();i++){
+        JSONObject existing=scripts.optJSONObject(i);
+        if(existing!=null&&id.equals(existing.optString("id")))return id;
+      }
+      if(prefs.getBoolean("chatgpt_script_seeded_v1",false)||scripts.length()>=30)return "";
+      JSONObject script=new JSONObject();
+      script.put("id",id);
+      script.put("name","Criar arte no ChatGPT Chat");
+      script.put("body","CRIAR_ARTE_CHATGPT");
+      scripts.put(script);
+      root.put("version",1);
+      prefs.edit().putString("scripts_v1",root.toString())
+        .putBoolean("chatgpt_script_seeded_v1",true).apply();
+      return id;
+    }catch(Exception ignored){return "";}
+  }
+
   static void ensureWorkflow(SharedPreferences prefs){
     try{
       JSONObject root=new JSONObject(prefs.getString("workflows_v1","{}"));
       JSONArray flows=root.optJSONArray("flows");
       if(flows==null)return;
       boolean changed=false;
+      String chatScript=ensureChatScript(prefs);
       for(int i=0;i<flows.length();i++){
         JSONObject flow=flows.optJSONObject(i);
         if(flow==null||!flow.optBoolean("enabled",false))continue;
@@ -45,7 +69,7 @@ final class CreativeAutomation {
           review.put("review_mode","auto_verified");changed=true;
         }
         if(!image.has("image_source")){
-          image.put("image_source","generated_local");changed=true;
+          image.put("image_source","chatgpt_chat");changed=true;
         }
         if(caption==null&&nodes.length()<30&&edges.length()<60){
           String id="n_creative_caption_"+Math.abs(flow.optString("id").hashCode());
@@ -58,6 +82,27 @@ final class CreativeAutomation {
           edge.put("from",duration.optString("id"));edge.put("to",id);
           edges.put(edge);
           changed=true;
+        }
+        if("chatgpt_chat".equals(image.optString("image_source"))&&caption!=null&&
+           !chatScript.isEmpty()&&nodes.length()<30&&edges.length()<60){
+          boolean hasChatNode=false;
+          for(int j=0;j<nodes.length();j++){
+            JSONObject n=nodes.optJSONObject(j);
+            if(n!=null&&"action_script".equals(n.optString("type"))&&
+               chatScript.equals(n.optString("scriptId")))hasChatNode=true;
+          }
+          if(!hasChatNode){
+            String id="n_chat_script_"+Math.abs(flow.optString("id").hashCode());
+            JSONObject scriptNode=new JSONObject();
+            scriptNode.put("id",id);scriptNode.put("type","action_script");
+            scriptNode.put("scriptId",chatScript);
+            scriptNode.put("x",690);scriptNode.put("y",700);
+            nodes.put(scriptNode);
+            JSONObject edge=new JSONObject();
+            edge.put("from",caption.optString("id"));edge.put("to",id);
+            edges.put(edge);
+            changed=true;
+          }
         }
       }
       if(changed)prefs.edit().putString("workflows_v1",root.toString()).apply();
@@ -122,4 +167,41 @@ final class CreativeAutomation {
       throw failure instanceof IOException?(IOException)failure:new IOException("Falha ao salvar arte gerada.",failure);
     }
   }
+
+  /** Stores a returned image in the gallery without editing or recompressing its pixels. */
+  static Uri importSharedImage(Context context,Uri source) throws IOException {
+    if(source==null)throw new IOException("Imagem não recebida.");
+    if(Build.VERSION.SDK_INT<29)throw new IOException("Importação requer Android 10 ou superior.");
+    ContentResolver resolver=context.getContentResolver();
+    String mime=resolver.getType(source);
+    if(mime==null||!mime.startsWith("image/"))mime="image/png";
+    String suffix=mime.contains("jpeg")?".jpg":mime.contains("webp")?".webp":".png";
+    ContentValues values=new ContentValues();
+    values.put(MediaStore.Images.Media.DISPLAY_NAME,"XAND_CHAT_"+System.currentTimeMillis()+suffix);
+    values.put(MediaStore.Images.Media.MIME_TYPE,mime);
+    values.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/XAND MUSIC");
+    values.put(MediaStore.Images.Media.IS_PENDING,1);
+    Uri target=resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
+    if(target==null)throw new IOException("Não foi possível salvar a imagem do ChatGPT.");
+    try{
+      try(java.io.InputStream in=resolver.openInputStream(source);
+          OutputStream out=resolver.openOutputStream(target,"w")){
+        if(in==null||out==null)throw new IOException("Falha ao ler a imagem compartilhada.");
+        byte[] buffer=new byte[32768];int n;long bytes=0;
+        while((n=in.read(buffer))!=-1){
+          bytes+=n;if(bytes>40L*1024*1024)throw new IOException("Imagem maior que 40 MB.");
+          out.write(buffer,0,n);
+        }
+        if(bytes==0)throw new IOException("Imagem recebida vazia.");
+      }
+      ContentValues complete=new ContentValues();
+      complete.put(MediaStore.Images.Media.IS_PENDING,0);
+      resolver.update(target,complete,null,null);
+      return target;
+    }catch(Exception failure){
+      try{resolver.delete(target,null,null);}catch(Exception ignored){}
+      throw failure instanceof IOException?(IOException)failure:new IOException("Falha ao importar imagem.",failure);
+    }
+  }
+
 }
