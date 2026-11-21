@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
  JSONArray resolved(){try{return new JSONArray(prefs.getString("resolved","[]"));}catch(Exception e){return new JSONArray();}}
  void markResolved(int idx){JSONArray old=load(),next=new JSONArray(),history=resolved();String done=old.optString(idx);for(int j=0;j<old.length();j++){String link=old.optString(j);if(j==idx)history.put(link);else next.put(link);}SharedPreferences.Editor e=prefs.edit().putString("queue",next.toString()).putString("resolved",history.toString());if(done.equals(prefs.getString("recognition_pending_url","")))e.remove("recognition_pending_url");e.remove("review_pending_"+done).remove("image_pending_"+done).remove("logo_pending_"+done).remove("duration_pending_"+done).apply();show();}
  void add(String text){if(text==null)return; Matcher m=Pattern.compile("https?://[^\\s]+").matcher(text); if(!m.find())return; String url=m.group().replaceAll("[),.;]+$",""); if(!TikTokMusicResolver.isTrustedLink(url))return; JSONArray a=load(); for(int i=0;i<a.length();i++)if(url.equals(a.optString(i))){Toast.makeText(this,"Essa música já está na fila.",Toast.LENGTH_LONG).show();return;} JSONArray history=resolved();for(int i=0;i<history.length();i++)if(url.equals(history.optString(i))){Toast.makeText(this,"Link já utilizado. Consulte o histórico.",Toast.LENGTH_LONG).show();return;}a.put(url);save(a);if(!runShareFlows(url))identifySong(url,false);}
- public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{resumePendingCreation();resumePendingVideoExport();},900);}
+ public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("xand_queue",MODE_PRIVATE);CreativeAutomation.ensureWorkflow(prefs);if(b!=null){pendingImageUrl=b.getString("pending_image_url","");pendingExportUrl=b.getString("pending_export_url","");pendingLogoUrl=b.getString("pending_logo_url","");shareIntentHandled=b.getBoolean("share_intent_handled",false);}Intent incoming=getIntent();if(Intent.ACTION_SEND.equals(incoming.getAction())&&!shareIntentHandled){shareIntentHandled=true;clearConsumedShareIntent();if(incoming.getType()!=null&&incoming.getType().startsWith("image/")){show();receiveSharedArtwork(incoming);return;}String shared=incoming.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(incoming);new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{resumePendingCreation();retryLegacyGalleryExports();resumePendingVideoExport();},900);}
  @Override protected void onSaveInstanceState(Bundle state){state.putString("pending_image_url",pendingImageUrl);state.putString("pending_export_url",pendingExportUrl);state.putString("pending_logo_url",pendingLogoUrl);state.putBoolean("share_intent_handled",shareIntentHandled);super.onSaveInstanceState(state);}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);shareIntentHandled=Intent.ACTION_SEND.equals(intent.getAction());clearConsumedShareIntent();if(shareIntentHandled){if(intent.getType()!=null&&intent.getType().startsWith("image/")){show();receiveSharedArtwork(intent);return;}String shared=intent.getStringExtra(Intent.EXTRA_TEXT);if(isTikTokShare(shared))add(shared);else{show();importAudioResult(shared);return;}}show();openPendingStepIfRequested(intent);}
  
@@ -694,6 +694,27 @@ void openPendingStepIfRequested(Intent incoming){
   }
  }
 
+ // Recover MediaStore covers created by an older installation after image access is granted.
+ void retryLegacyGalleryExports(){
+  if(android.os.Build.VERSION.SDK_INT<33||
+     checkSelfPermission("android.permission.READ_MEDIA_IMAGES")!=
+       android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+  try{
+   JSONObject all=metadata();
+   JSONArray queue=load();boolean changed=false;
+   for(int i=0;i<queue.length();i++){
+    String url=queue.optString(i);
+    JSONObject item=all.optJSONObject(url);
+    if(item==null||item.optBoolean("video_legacy_permission_retry",false))continue;
+    if("Asset loader error".equals(item.optString("video_export_issue",""))){
+     item.remove("video_export_issue");
+     item.put("video_legacy_permission_retry",true);
+     all.put(url,item);changed=true;
+    }
+   }
+   if(changed)prefs.edit().putString("metadata",all.toString()).apply();
+  }catch(Exception ignored){}
+ }
  // Export one queued clip at a time to limit memory use on the Moto G82.
  void resumePendingVideoExport(){
   if(!videoJobs.isEmpty())return;
