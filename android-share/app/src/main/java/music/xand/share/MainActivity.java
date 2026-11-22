@@ -1271,6 +1271,8 @@ void openPendingStepIfRequested(Intent incoming){
   settings.setPadding(0,24,0,10);root.addView(settings);
   Button flow=action("⚙  Editar fluxo de nós",false);
   flow.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(flow);
+  Button remote=action("☁  Conectar ao controle do iPhone",false);
+  remote.setOnClickListener(v->startActivity(new Intent(this,RemoteControlActivity.class)));root.addView(remote);
   TextView note=label(PHOTO_ONLY_CHANNEL?"O fluxo prepara foto aprovada e legenda, sem MP4. No TikTok, escolha a música correta do catálogo e salve em Rascunhos. Não publica automaticamente. O editor continua acessível em Gerenciar → Abrir editor (outros trabalhos).":"O fluxo prepara arte e MP4. Para usar o editor instalado, abra Gerenciar → Produzir no XAND MUSIC Editor. No TikTok: áudio original 0% e música adicionada 100% (verificação pendente). Não publica automaticamente.",12,muted,false);
   note.setPadding(5,6,5,18);root.addView(note);
   if(history.length()>0){
