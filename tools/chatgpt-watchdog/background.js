@@ -8,11 +8,13 @@ const ALARM_NAME = "xand-watchdog-check";
 const PENDING_PREFIX = "pending_";
 const RECOVERY_PREFIX = "recovery_";
 const SUPPRESS_PREFIX = "suppress_";
+const LIMIT_PREFIX = "limit_";
 const CHECK_PERIOD_MIN = 1;
 const ERROR_GRACE_MS = 45 * 1000;
 const NO_RESPONSE_MS = 6 * 60 * 1000;
 const STREAM_STALL_MS = 9 * 60 * 1000;
 const RECOVERY_RETRY_MS = 2 * 60 * 1000;
+const recovering = new Set();
 
 function isProject(url) {
   try {
@@ -28,6 +30,7 @@ function isProject(url) {
 const pendingKey = (tabId) => PENDING_PREFIX + tabId;
 const recoveryKey = (tabId) => RECOVERY_PREFIX + tabId;
 const suppressKey = (tabId) => SUPPRESS_PREFIX + tabId;
+const limitKey = (tabId) => LIMIT_PREFIX + tabId;
 const sessionGet = async (key) => (await chrome.storage.session.get(key))[key];
 const sessionSet = async (key, value) => chrome.storage.session.set({ [key]: value });
 const sessionRemove = async (key) => chrome.storage.session.remove(key);
@@ -56,8 +59,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         assistantCount: Number(message.assistantCount || 0),
         signature: String(message.signature || ""),
         // Temporary, per-browser-session context; no persistent chat transcript.
-        userText: String(message.userText || "").trim().slice(0, 1400),
-        previousAssistantText: String(message.previousAssistantText || "").trim().slice(-650),
+        userText: String(message.userText || "").trim().slice(0, 1800),
+        previousAssistantText: String(message.previousAssistantText || "").trim().slice(-900),
+        recentTurns: cleanTurns(message.recentTurns),
         attempted: false,
         urlAtSubmit: sender.tab.url
       });
@@ -78,9 +82,19 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void chrome.storage.session.remove([
-    pendingKey(tabId), recoveryKey(tabId), suppressKey(tabId)
+    pendingKey(tabId), recoveryKey(tabId), suppressKey(tabId), limitKey(tabId)
   ]);
 });
+
+function cleanTurns(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-8).filter((item) => item &&
+    (item.role === "user" || item.role === "assistant")
+  ).map((item) => ({
+    role: item.role,
+    text: String(item.text || "").trim().slice(-700)
+  })).filter((item) => item.text);
+}
 
 async function probeTab(tabId) {
   try {
@@ -91,46 +105,64 @@ async function probeTab(tabId) {
 }
 
 async function recover(tabId, reason, testOnly = false, probe = null) {
+  if (!testOnly && recovering.has(tabId)) return false;
+  if (!testOnly) recovering.add(tabId);
+  try {
   const original = await chrome.tabs.get(tabId).catch(() => null);
   if (!original || !isProject(original.url)) return false;
+  if (!testOnly && await sessionGet(suppressKey(tabId))) return false;
 
   const key = pendingKey(tabId);
   const pending = await sessionGet(key);
   if (pending?.attempted && !testOnly) return false;
+  if (!testOnly && await sessionGet(limitKey(tabId))) return false;
 
   // Mark first, so a delayed alarm can never open multiple new chats.
   if (pending && !testOnly) {
     await sessionSet(key, { ...pending, attempted: true, attemptedAt: Date.now() });
   }
+  if (reason === "conversation-limit" && !testOnly) {
+    await sessionSet(limitKey(tabId), { detectedAt: Date.now(), url: original.url });
+  }
   const data = probe || await probeTab(tabId) || {};
-  const lastUserText = String(pending?.userText || data.lastUserText || "").trim().slice(0, 1400);
+  const lastUserText = String(pending?.userText || data.lastUserText || "").trim().slice(0, 1800);
   const previousAssistantText = String(
     pending?.previousAssistantText || data.lastAssistantText || ""
   ).trim().slice(-650);
+  const turns = cleanTurns(data.recentTurns).length
+    ? cleanTurns(data.recentTurns) : cleanTurns(pending?.recentTurns);
+  const recentContext = turns.slice(-6).map((item, index) =>
+    `${index + 1}. ${item.role === "user" ? "Usuário" : "Assistente"}: ${item.text.slice(-320)}`
+  ).join("\n");
   const reasonLabel = {
     "visible-error": "erro visível no ChatGPT",
     "no-response": "mensagem sem resposta",
     "stalled-stream": "resposta interrompida",
+    "conversation-limit": "aviso explícito de limite da conversa",
     "manual-test": "teste manual"
   }[reason] || "falha observada";
   const originalUrl = original.url;
+  const recoveryId = `${tabId}-${Date.now()}`;
   const handoff = [
     "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC / CAPAS TIKTOK.",
+    "RECUPERAÇÃO-ID: " + recoveryId,
     testOnly
       ? "Este é um TESTE do mecanismo de continuidade; não execute tarefas reais."
-      : "O chat anterior ficou sem resposta ou apresentou erro. Retome somente o que ficou pendente.",
+      : "Continue o trabalho anterior apenas a partir do ponto comprovadamente pendente, sem recriar o projeto.",
     "Projeto: XAND MUSIC - Capas TikTok. Trabalhe exclusivamente no modo Chat.",
     "Chat anterior: " + originalUrl,
-    "Sinal detectado: " + reasonLabel + ". O monitor não confirma que a tarefa anterior falhou.",
+    "Repositório de referência: https://github.com/carlosalexandrevicente12-droid/xand-trend-music (confira estado e branch antes de alterar).",
+    "Sinal detectado: " + reasonLabel + ". O monitor não confirma que a tarefa anterior falhou nem que tudo foi transferido.",
     lastUserText
-      ? "Último pedido registrado antes do envio (trecho): " + lastUserText
+      ? "Último pedido registrado (trecho): " + lastUserText
       : "Último pedido não recuperado. Consulte o projeto ou peça o trecho necessário ao usuário.",
     previousAssistantText
       ? "Trecho da resposta anterior (pode não refletir o estado atual): " + previousAssistantText
       : "",
+    recentContext ? "Últimos turnos disponíveis na tela (extratos, não histórico integral):\n" + recentContext : "",
     "Consulte as instruções, a memória e as Fontes do projeto. Verifique o estado real antes de executar.",
     "NÃO repita publicações, envios, exclusões, alterações no GitHub ou outras ações externas sem verificar se já ocorreram.",
-    "Preserve tudo; diga qual etapa pode continuar e qual depende de confirmação."
+    "Não afirme ter lido todo o histórico. Preserve arquivos e sessões; informe o que está confirmado, o que falta e continue do último ponto seguro."
   ].filter(Boolean).join("\n\n");
 
   const next = await chrome.tabs.create({ url: PROJECT_HOME, active: true });
@@ -141,6 +173,9 @@ async function recover(tabId, reason, testOnly = false, probe = null) {
   });
   await tryHandoff(next.id);
   return true;
+  } finally {
+    if (!testOnly) recovering.delete(tabId);
+  }
 }
 
 async function tryHandoff(tabId) {
@@ -174,6 +209,10 @@ async function checkPending(tabId, state, now) {
 
   const probe = await probeTab(tabId);
   if (!probe) return;
+  if (probe.conversationLimitReached) {
+    await recover(tabId, "conversation-limit", false, probe);
+    return;
+  }
   const assistantCount = Number(probe.assistantCount || 0);
   const changed = assistantCount > state.assistantCount ||
     (probe.signature && probe.signature !== state.signature);
@@ -215,6 +254,19 @@ async function checkAll() {
       if (Number.isInteger(tabId)) await tryHandoff(tabId).catch(console.warn);
     }
   }
+  // Limit warnings can appear after a previous response, with no pending submission.
+  // Inspect only foreground project tabs; never wake or recover unrelated chats.
+  const activeTabs = await chrome.tabs.query({ active: true });
+  for (const tab of activeTabs) {
+    if (!isProject(tab.url) || await sessionGet(suppressKey(tab.id)) ||
+      await sessionGet(limitKey(tab.id))) continue;
+    const latest = await sessionGet(pendingKey(tab.id));
+    if (latest?.attempted) continue;
+    const probe = await probeTab(tab.id);
+    if (probe?.conversationLimitReached) {
+      await recover(tab.id, "conversation-limit", false, probe);
+    }
+  }
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -229,3 +281,4 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.action.onClicked.addListener((tab) => {
   if (isProject(tab.url)) void recover(tab.id, "manual-test", true).catch(console.warn);
 });
+
