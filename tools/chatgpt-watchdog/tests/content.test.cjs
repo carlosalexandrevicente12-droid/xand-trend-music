@@ -193,3 +193,60 @@ test("detecta aviso de resposta interrompida no ChatGPT", () => {
     leaves: [element("O usuário relatou: " + text)]
   }), false);
 });
+
+function detectsLimit(notices) {
+  const context = {
+    document: {
+      querySelectorAll: () => notices,
+      addEventListener: () => {}
+    },
+    chrome: { runtime: { onMessage: { addListener: () => {} } } },
+    location: { origin: "https://chatgpt.com", pathname: "/g/test/project" }
+  };
+  vm.createContext(context);
+  vm.runInContext(contentScript, context);
+  return vm.runInContext("conversationLimitReached()", context);
+}
+
+test("detecta limite explicito em portugues e ingles", () => {
+  for (const warning of [
+    "Você atingiu o limite máximo desta conversa.",
+    "Esta conversa atingiu o limite.",
+    "You've reached the maximum length for this conversation, but you can start a new chat."
+  ]) {
+    assert.equal(detectsLimit([element(warning)]), true, warning);
+  }
+});
+
+test("ignora mencoes antigas ou ocultas sobre limite", () => {
+  const historical = element("Você atingiu o limite máximo desta conversa.");
+  historical.closest = () => ({ getAttribute: () => "user" });
+  assert.equal(detectsLimit([historical]), false);
+  assert.equal(detectsLimit([element("Você atingiu o limite máximo desta conversa.", { visible: false })]), false);
+  assert.equal(detectsLimit([element("Ele falou que você atingiu o limite máximo desta conversa.")]), false);
+});
+
+test("reconhece recuperacao ja enviada e nao reenvia a mesma mensagem", async () => {
+  const message = "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC / CAPAS TIKTOK.\n\nRECUPERAÇÃO-ID: 123-456\n\nContinuar.";
+  let clicks = 0;
+  const editor = { innerText: "", textContent: "" };
+  const context = {
+    message,
+    document: {
+      addEventListener: () => {},
+      querySelector: () => editor,
+      querySelectorAll: (selector) => selector.includes('[data-message-author-role="user"]')
+        ? [{ innerText: message }] : [],
+      execCommand: () => { clicks++; }
+    },
+    chrome: { runtime: { onMessage: { addListener: () => {} } } },
+    location: { origin: "https://chatgpt.com", pathname: "/g/g-p-6b0182d2a7a0819183158c736eb617ed/project" }
+  };
+  vm.createContext(context);
+  vm.runInContext(contentScript, context);
+  const result = await vm.runInContext("insertHandoff(message)", context);
+  assert.equal(result.submitted, true);
+  assert.equal(result.alreadyPresent, true);
+  assert.equal(clicks, 0);
+});
+
