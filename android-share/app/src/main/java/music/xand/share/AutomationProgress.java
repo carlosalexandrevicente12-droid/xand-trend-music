@@ -42,6 +42,37 @@ final class AutomationProgress {
     expanded.addView(row);
     String message="Fila vazia";int completed=0;int total=4;
     try{
+      if(MainActivity.PHOTO_ONLY_CHANNEL){
+        JSONArray queue=new JSONArray(prefs.getString("queue","[]"));
+        JSONObject all=new JSONObject(prefs.getString("metadata","{}"));
+        String target="";
+        for(int i=0;i<queue.length();i++){
+          String url=queue.optString(i);
+          JSONObject item=all.optJSONObject(url);
+          if(item==null||!"user_approved".equals(item.optString("photo_review_status",""))||
+             (item.optString("caption_auto","").isEmpty()&&item.optString("caption_user","").isEmpty())){target=url;break;}
+        }
+        if(target.isEmpty()&&queue.length()>0)target=queue.optString(0);
+        if(!target.isEmpty()){
+          JSONObject item=all.optJSONObject(target);if(item==null)item=new JSONObject();
+          completed=1;
+          boolean credits=!item.optString("song","").trim().isEmpty()&&!item.optString("artist","").trim().isEmpty()&&
+            ("identified".equals(item.optString("recognition_status"))||prefs.getBoolean("review_confirmed_"+target,false));
+          boolean photoApproved="user_approved".equals(item.optString("photo_review_status",""))&&
+            !item.optString("generated_cover_uri","").isEmpty();
+          boolean captionReady=!item.optString("caption_auto","").isEmpty()||!item.optString("caption_user","").isEmpty();
+          if(credits)completed++;
+          if(photoApproved)completed++;
+          if(captionReady)completed++;
+          String song=item.optString("song","Música não identificada");
+          if(song.trim().isEmpty())song="Música não identificada";
+          if(song.length()>34)song=song.substring(0,34)+"…";
+          if(!credits)message="AGUARDANDO créditos • "+song;
+          else if(!photoApproved)message="AGUARDANDO foto aprovada • "+song;
+          else if(!captionReady)message="AGUARDANDO legenda • "+song;
+          else message="PRONTO PARA RASCUNHO • "+song;
+        }
+      }else{
       JSONArray queue=new JSONArray(prefs.getString("queue","[]"));
       JSONObject all=new JSONObject(prefs.getString("metadata","{}"));
       String target="";
@@ -76,6 +107,7 @@ final class AutomationProgress {
         else if(credits)message="AGUARDANDO criação ou exportação • "+song;
         else message="AGUARDANDO créditos • "+song;
       }
+      }
     }catch(Exception ignored){message="Dados da fila indisponíveis";}
     final int done=completed;
     TextView status=label(a,message,12,Color.WHITE);
@@ -85,7 +117,7 @@ final class AutomationProgress {
     progress.setProgressTintList(ColorStateList.valueOf(0xffff8500));
     progress.setProgressBackgroundTintList(ColorStateList.valueOf(0xff494949));
     expanded.addView(progress,new LinearLayout.LayoutParams(-1,dp(a,6)));
-    TextView count=label(a,done+" de "+total+" etapas comprovadas • percentual refere-se às etapas, não ao tempo",11,0xffcccccc);
+    TextView count=label(a,MainActivity.PHOTO_ONLY_CHANNEL?done+" de "+total+" etapas de preparação • rascunho a confirmar no TikTok":done+" de "+total+" etapas comprovadas • percentual refere-se às etapas, não ao tempo",11,0xffcccccc);
     count.setPadding(0,dp(a,8),0,0);expanded.addView(count);
     Button show=new Button(a);show.setText("Mostrar progresso");
     show.setAllCaps(false);show.setTextColor(Color.WHITE);show.setTextSize(13);
