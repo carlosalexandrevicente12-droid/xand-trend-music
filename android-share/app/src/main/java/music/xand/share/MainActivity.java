@@ -155,6 +155,8 @@ public class MainActivity extends Activity {
      JSONObject all=metadata(),item=all.optJSONObject(url);if(item==null)item=new JSONObject();
      item.put("generated_cover_uri",image.toString());
      item.put("generated_cover_source","chatgpt_chat");
+     item.put("photo_review_status","pending_user_review");
+     item.put("post_format_used","static_photo");
      item.remove("generation_issue");
      all.put(url,item);
      prefs.edit().putString("metadata",all.toString()).remove("image_pending_"+url)
@@ -1136,6 +1138,10 @@ void openPendingStepIfRequested(Intent incoming){
   JSONObject item=info(url);
   String uri=item.optString("generated_cover_uri","");
   if(uri.isEmpty())return;
+  if(PHOTO_ONLY_CHANNEL&&!"user_approved".equals(item.optString("photo_review_status",""))){
+   Toast.makeText(this,"Vincule a foto aprovada antes de compartilhar.",Toast.LENGTH_LONG).show();
+   return;
+  }
   try{
    Uri cover=Uri.parse(uri);
    Intent send=new Intent(Intent.ACTION_SEND);
@@ -1158,6 +1164,7 @@ void openPendingStepIfRequested(Intent incoming){
   String url=items.optString(idx);
   JSONObject item=info(url);
   boolean cover=!item.optString("generated_cover_uri","").isEmpty();
+  boolean photoApproved="user_approved".equals(item.optString("photo_review_status",""));
   boolean legend=!item.optString("caption_auto","").isEmpty();
   java.util.ArrayList<String> options=new java.util.ArrayList<>();
   options.add("Mover uma posição para cima");
@@ -1167,7 +1174,7 @@ void openPendingStepIfRequested(Intent incoming){
   options.add(PHOTO_ONLY_CHANNEL?"Abrir editor (outros trabalhos)":"Produzir no XAND MUSIC Editor");
   if(PHOTO_ONLY_CHANNEL)options.add("Vincular foto aprovada do celular");
   if(chatImageSelected()&&!cover)options.add("Executar script no ChatGPT Chat");
-  if(cover){options.add("Visualizar arte criada");options.add(PHOTO_ONLY_CHANNEL?"Compartilhar foto e legenda":"Compartilhar arte e legenda");}
+  if(cover){options.add("Visualizar arte criada");if(!PHOTO_ONLY_CHANNEL||photoApproved)options.add(PHOTO_ONLY_CHANNEL?"Compartilhar foto e legenda":"Compartilhar arte e legenda");}
   if(!PHOTO_ONLY_CHANNEL&&!item.optString("video_uri","").isEmpty())options.add("Compartilhar vídeo MP4 e legenda");
   if(!PHOTO_ONLY_CHANNEL&&!item.optString("video_export_issue","").isEmpty())options.add("Tentar exportar vídeo novamente");
   if(legend)options.add("Copiar legenda");
@@ -1219,8 +1226,10 @@ void openPendingStepIfRequested(Intent incoming){
    String genre=item.optString("genre","").trim();
    if(!genre.isEmpty()){TextView g=label("Estilo: "+genre,12,muted,false);g.setPadding(0,4,0,0);card.addView(g);}
    String state;
-   if(PHOTO_ONLY_CHANNEL&&!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Foto e legenda prontas • compartilhar em Gerenciar";
-   else if(PHOTO_ONLY_CHANNEL&&!item.optString("generated_cover_uri","").isEmpty())state="Foto pronta • preparar legenda";
+   boolean photoApproved="user_approved".equals(item.optString("photo_review_status",""));
+   if(PHOTO_ONLY_CHANNEL&&photoApproved&&!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Foto aprovada e legenda prontas • compartilhar em Gerenciar";
+   else if(PHOTO_ONLY_CHANNEL&&!item.optString("generated_cover_uri","").isEmpty()&&!photoApproved)state="Foto antiga ou pendente • vincule a versão aprovada";
+   else if(PHOTO_ONLY_CHANNEL&&photoApproved&&!item.optString("generated_cover_uri","").isEmpty())state="Foto aprovada • preparar legenda";
    else if(PHOTO_ONLY_CHANNEL&&prefs.getBoolean("chatgpt_handoff_"+url,false))state="Aguardando foto do ChatGPT";
    else if(PHOTO_ONLY_CHANNEL&&prefs.getBoolean("image_pending_"+url,false))state="Aguardando foto aprovada";
    else if(PHOTO_ONLY_CHANNEL&&"original".equals(item.optString("recognition_status","")))state="Som original • artista não confirmado";
