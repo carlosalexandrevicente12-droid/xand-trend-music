@@ -391,6 +391,18 @@ void openPendingStepIfRequested(Intent incoming){
  }
 
  void imageOptions(String url){
+  if(PHOTO_ONLY_CHANNEL){
+   String[] choices={"Vincular foto aprovada do celular","Pedir imagem ao ChatGPT","Pesquisar imagem no Pinterest","Visualizar foto vinculada","Compartilhar foto no TikTok"};
+   new AlertDialog.Builder(this).setTitle("Foto única • XAND MUSIC")
+    .setItems(choices,(d,which)->{
+     if(which==0)selectApprovedPhoto(url);
+     else if(which==1)sendArtworkPromptToChatGPT(url,true);
+     else if(which==2)pinterest(url);
+     else if(which==3)openGeneratedCover(url);
+     else shareGeneratedCover(url);
+    }).setNegativeButton("Voltar",null).show();
+   return;
+  }
   String[] choices={"Usar imagem do celular como fundo","Selecionar logo original XAND sem recortar","Pesquisar imagens no Pinterest","Pedir imagem inédita ao ChatGPT","Arrastar e ajustar tamanho da logo","Visualizar a capa antes de salvar","Salvar capa PNG 1080 × 1920","Retirar a imagem escolhida"};
   new AlertDialog.Builder(this).setTitle("Imagens e arte • XAND MUSIC").setItems(choices,(d,w)->{
    switch(w){
@@ -920,7 +932,7 @@ void openPendingStepIfRequested(Intent incoming){
        .putBoolean("image_pending_"+url,true).apply();
      invokeChatArtScript(url,flow);
     }
-    if(PHOTO_ONLY_CHANNEL&&chatSource)return; // Aguarda a foto do ChatGPT, sem capa local.
+    if(PHOTO_ONLY_CHANNEL)return; // Somente foto do ChatGPT ou Pinterest; sem geração local.
     // The free on-device image is a fallback; ChatGPT artwork can replace it.
     if(!chatSource && !"generated_local".equals(source))return;
     if(!item.optString("generated_cover_uri","").isEmpty()||
