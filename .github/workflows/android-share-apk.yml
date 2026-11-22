@@ -2,7 +2,7 @@ name: Android share APK
 on:
   workflow_dispatch:
   push:
-    branches: [feature/android-share-queue, fix/photo-only-v07]
+    branches: [feature/android-share-queue, fix/photo-only-v07, feature/motorola-control-client]
     paths: ['android-share/**', '.github/workflows/android-share-apk.yml']
 jobs:
   build:
