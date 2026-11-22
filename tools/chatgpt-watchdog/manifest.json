@@ -1,32 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "XAND Chat — Recuperação",
-  "description": "Continua conversas do projeto XAND MUSIC ao atingir o limite ou após falhas, preservando chats anteriores.",
-  "version": "0.2.0",
-  "permissions": [
-    "alarms",
-    "tabs",
-    "storage"
-  ],
-  "host_permissions": [
-    "https://chatgpt.com/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://chatgpt.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
+  "name": "XAND Chat — PAUSADA",
+  "description": "Extensão XAND temporariamente suspensa para diagnóstico. Sem monitoramento, scripts ou permissões.",
+  "version": "0.2.1",
   "action": {
-    "default_title": "Testar recuperação do projeto XAND"
+    "default_title": "XAND Chat pausada — nenhuma ação"
   }
 }
-
