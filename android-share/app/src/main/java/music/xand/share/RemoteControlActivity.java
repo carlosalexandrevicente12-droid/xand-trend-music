@@ -5,7 +5,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.content.SharedPreferences;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import android.graphics.Color;
+import android.util.Base64;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -21,14 +24,20 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.net.ssl.HttpsURLConnection;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 
 /** Opt-in control channel; never touches posting, media, queue state or TikTok. */
 public final class RemoteControlActivity extends Activity {
     private static final String BASE = "https://xand-music-analytics.carlosalexandrevicente12.workers.dev";
+    private static final String KEY_ALIAS = "xand_control_device_token_v1";
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private SharedPreferences credentials;
@@ -39,7 +48,7 @@ public final class RemoteControlActivity extends Activity {
 
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
-            if (!foreground || credentials.getString("token", "").isEmpty()) return;
+            if (!foreground || readToken().isEmpty()) return;
             executor.execute(() -> {
                 try {
                     refreshStatus();
@@ -69,7 +78,7 @@ public final class RemoteControlActivity extends Activity {
         description.setPadding(0, 28, 0, 24);
         column.addView(description);
 
-        state = text(credentials.getString("token", "").isEmpty()
+        state = text(readToken().isEmpty()
             ? "Ainda não pareado." : "Pareado. Conexão será verificada.", 15, Color.rgb(190, 190, 190));
         state.setPadding(0, 0, 0, 28);
         column.addView(state);
@@ -103,6 +112,10 @@ public final class RemoteControlActivity extends Activity {
     }
 
     private void pair() {
+        if (!readToken().isEmpty()) {
+            state.setText("Já existe pareamento local. Revogue no iPhone antes de trocar a conexão.");
+            return;
+        }
         final String code = pairingCode.getText().toString().trim().toLowerCase(Locale.ROOT);
         if (!code.matches("[a-f0-9]{32}")) {
             state.setText("Código inválido: confira os 32 caracteres.");
@@ -119,7 +132,7 @@ public final class RemoteControlActivity extends Activity {
                 if (!token.matches("[a-f0-9]{64}") || !id.matches("[0-9a-fA-F-]{36}")) {
                     throw new IllegalStateException("Resposta de pareamento inválida");
                 }
-                credentials.edit().putString("token", token).putString("device_id", id).apply();
+                saveToken(token, id);
                 main.post(() -> {
                     pairingCode.setText("");
                     state.setText("Pareado. Aguardando primeiro contato.");
@@ -135,7 +148,7 @@ public final class RemoteControlActivity extends Activity {
     }
 
     private void refreshStatus() throws Exception {
-        String token = credentials.getString("token", "");
+        String token = readToken();
         if (token.isEmpty()) return;
         SharedPreferences queuePrefs = getSharedPreferences("xand_queue", MODE_PRIVATE);
         int count = new JSONArray(queuePrefs.getString("queue", "[]")).length();
@@ -192,7 +205,7 @@ public final class RemoteControlActivity extends Activity {
         super.onResume();
         foreground = true;
         main.removeCallbacks(refresh);
-        if (!credentials.getString("token", "").isEmpty()) main.post(refresh);
+        if (!readToken().isEmpty()) main.post(refresh);
     }
 
     @Override protected void onPause() {
@@ -204,5 +217,45 @@ public final class RemoteControlActivity extends Activity {
     @Override protected void onDestroy() {
         executor.shutdownNow();
         super.onDestroy();
+    }
+
+    private SecretKey getDeviceKey() throws Exception {
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+        KeyStore.Entry existing = store.getEntry(KEY_ALIAS, null);
+        if (existing instanceof KeyStore.SecretKeyEntry) {
+            return ((KeyStore.SecretKeyEntry) existing).getSecretKey();
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        generator.init(new KeyGenParameterSpec.Builder(KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .build());
+        return generator.generateKey();
+    }
+
+    private void saveToken(String token, String id) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, getDeviceKey());
+        String iv = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP);
+        String encoded = Base64.encodeToString(cipher.doFinal(token.getBytes(StandardCharsets.UTF_8)), Base64.NO_WRAP);
+        credentials.edit().putString("encrypted_token", iv + "." + encoded)
+            .putString("device_id", id).remove("token").apply();
+    }
+
+    private String readToken() {
+        try {
+            String encrypted = credentials.getString("encrypted_token", "");
+            String[] fields = encrypted.split("\\.", -1);
+            if (fields.length != 2) return "";
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            byte[] iv = Base64.decode(fields[0], Base64.NO_WRAP);
+            cipher.init(Cipher.DECRYPT_MODE, getDeviceKey(), new GCMParameterSpec(128, iv));
+            String token = new String(cipher.doFinal(Base64.decode(fields[1], Base64.NO_WRAP)), StandardCharsets.UTF_8);
+            return token.matches("[a-f0-9]{64}") ? token : "";
+        } catch (Exception error) {
+            return "";
+        }
     }
 }
