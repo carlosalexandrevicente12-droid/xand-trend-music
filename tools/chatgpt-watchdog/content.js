@@ -32,6 +32,18 @@ function latestUserText() {
     .trim().slice(0, 1400);
 }
 
+// Read a small, ephemeral checkpoint from the visible project conversation.
+// The full chat may be virtualized: this is context, never a complete backup.
+function recentTurns() {
+  const messages = Array.from(document.querySelectorAll(
+    '[data-message-author-role="user"], [data-message-author-role="assistant"]'
+  )).slice(-8);
+  return messages.map((node) => ({
+    role: node.getAttribute("data-message-author-role"),
+    text: String(node.innerText || node.textContent || "").trim().slice(-700)
+  })).filter((entry) => entry.text && (entry.role === "user" || entry.role === "assistant"));
+}
+
 function isGenerating() {
   if (document.querySelector('button[data-testid="stop-button"], button[data-testid="stop-generating-button"]')) return true;
   return Array.from(document.querySelectorAll("main button")).some((btn) => {
@@ -61,6 +73,21 @@ function visibleError() {
   );
 }
 
+function conversationLimitReached() {
+  const pattern = /^(?:you(?:'|’)ve reached the maximum length for this conversation|this (?:conversation|chat) has (?:reached|exceeded) (?:its |the )?(?:maximum )?(?:length|limit)|(?:esta|essa) conversa (?:atingiu|chegou ao|alcançou) (?:o )?limite|(?:você|voce) (?:atingiu (?:o )?|chegou ao )limite (?:máximo )?(?:desta|da) conversa|limite máximo desta conversa)/i;
+  const notices = document.querySelectorAll(
+    '[role="alert"], [role="status"], [data-testid*="error-message"], ' +
+    '[data-sonner-toast], main p, main span, main small, main div'
+  );
+  return Array.from(notices).some((node) => {
+    if (!node.getClientRects().length || node.closest?.('[data-message-author-role="user"]')) return false;
+    const text = String(node.textContent || "").trim();
+    // Restrict fallback to a single UI leaf, not quoted conversation history.
+    if (node.children.length && !node.matches?.('[role="alert"], [role="status"], [data-sonner-toast], [data-testid*="error-message"]')) return false;
+    return text.length <= 320 && pattern.test(text);
+  });
+}
+
 function probe() {
   const answers = assistantNodes();
   const last = answers.at(-1);
@@ -71,7 +98,9 @@ function probe() {
     busy: isGenerating(),
     error: visibleError(),
     lastUserText: latestUserText(),
-    lastAssistantText: lastText.trim().slice(-650)
+    lastAssistantText: lastText.trim().slice(-900),
+    recentTurns: recentTurns(),
+    conversationLimitReached: conversationLimitReached()
   };
 }
 
@@ -81,13 +110,14 @@ function notifySubmitted() {
   // Capture the actual composer text before ChatGPT clears it on submission.
   // This stays in chrome.storage.session only and is never saved to disk.
   const editor = promptComposer();
-  const userText = String(editor?.innerText || editor?.textContent || "").trim().slice(0, 1400);
+  const userText = String(editor?.innerText || editor?.textContent || "").trim().slice(0, 1800);
   chrome.runtime.sendMessage({
     type: "XAND_SUBMITTED",
     assistantCount: data.assistantCount,
     signature: data.signature,
     userText,
-    previousAssistantText: data.lastAssistantText
+    previousAssistantText: data.lastAssistantText,
+    recentTurns: data.recentTurns
   }).catch(() => {});
 }
 
@@ -132,10 +162,18 @@ async function insertHandoff(text) {
   if (!isProject()) return { submitted: false, reason: "outside project" };
   const editor = promptComposer();
   if (!editor) return { submitted: false, reason: "composer not ready" };
-  const payload = String(text || "").slice(0, 3500);
+  const payload = String(text || "").slice(0, 6000);
   const marker = "RECUPERAÇÃO AUTOMÁTICA — XAND MUSIC";
   if (!payload.startsWith(marker)) {
     return { submitted: false, reason: "unexpected handoff" };
+  }
+
+  const recoveryId = payload.match(/^RECUPERAÇÃO-ID: ([^\n]+)$/m)?.[1];
+  if (recoveryId && Array.from(document.querySelectorAll(
+    '[data-message-author-role="user"]'
+  )).some((node) => String(node.innerText || node.textContent || "")
+    .includes("RECUPERAÇÃO-ID: " + recoveryId))) {
+    return { submitted: true, alreadyPresent: true };
   }
 
   // A previous recovery may have left a stale draft at the project home.
@@ -190,3 +228,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   return false;
 });
+
