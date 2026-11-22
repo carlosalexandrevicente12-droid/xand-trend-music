@@ -5,12 +5,13 @@
  * Requires Node 24+, ADB authorized on the Android device, and an authenticated
  * editor tab in Android Chrome. All media transfer is memory-only on the PC.
  *
- * Commands: inspect | prepare | upload | render | download | run
+ * Commands: inspect | prepare | upload | render | download | run | preflight
  * Options: --adb PATH --serial HOST:PORT --url http://192.168.0.6:1890/
  *          --source /sdcard/path/file.mp4 --force-render
  */
 import { execFileSync } from 'node:child_process';
 import { basename, posix } from 'node:path';
+import { evaluatePreflight } from './posting-checks.mjs';
 
 const options = {};
 let command = 'inspect';
@@ -23,7 +24,7 @@ for (let i = 2; i < process.argv.length; i++) {
   if (!value || value.startsWith('--')) throw Error('Falta valor para ' + a);
   options[a.slice(2)] = value;
 }
-if (!['inspect', 'prepare', 'upload', 'render', 'download', 'run'].includes(command)) throw Error('Comando inválido: ' + command);
+if (!['inspect', 'prepare', 'upload', 'render', 'download', 'run', 'preflight'].includes(command)) throw Error('Comando inválido: ' + command);
 
 const adb = options.adb || process.env.XAND_ADB_PATH || 'adb';
 const serial = options.serial || process.env.XAND_ADB_SERIAL;
@@ -304,6 +305,17 @@ async function main() {
         pending: !video ? 'video_not_ready_in_automation' : !selectedFile(s, video.name) ? 'upload_source' : 'review_logo_position' }, null, 2));
       return;
     }
+    if (command === 'preflight') {
+      const s = await state(chrome);
+      const tiktokSound = {
+        title: options['tiktok-sound-title'],
+        artist: options['tiktok-sound-artist'],
+        seconds: options['tiktok-sound-seconds']
+      };
+      console.log(JSON.stringify(evaluatePreflight({task:target, video,
+        editor:{...s, sourceSelected: !!video && selectedFile(s, video.name) === s.selected}, tiktokSound}), null, 2));
+      return;
+    }
     if (command === 'download') { console.log(JSON.stringify(await download(chrome), null, 2)); return; }
     if (!target.url || !video) throw Error('Primeira música da fila ainda não possui vídeo local.');
     if (command === 'upload') { console.log(JSON.stringify(await upload(chrome, video), null, 2)); return; }
@@ -331,3 +343,4 @@ async function main() {
 }
 
 main().catch(err => { console.error(JSON.stringify({ error: err.message, publication: 'not_attempted' })); process.exitCode = 1; });
+
