@@ -26,11 +26,26 @@ Comandos independentes:
 | Comando | Ação | Segurança |
 | --- | --- | --- |
 | `inspect` | Lê primeira música da fila, vídeo local e estado do editor | Nenhuma exportação |
+| `preflight` | Confere consistência antes da revisão no TikTok | Somente leitura; nunca publica |
 | `upload` | Envia vídeo da fila pelo editor autenticado | Transfere em memória, sem criar arquivos temporários no PC |
 | `prepare` | Define vídeo, formato 9:16, duração de 1–3 min e títulos vazios para manter arte integrada | Não renderiza |
 | `render` | Solicita exportação pelo editor | Recusa reexportar se existe trabalho ou resultado sem `--force-render` |
 | `download` | Baixa resultado para Downloads do Motorola e verifica presença | Não exclui originais |
 | `run` | Tenta enviar, preparar, exportar, aguardar até 3 minutos e baixar, em sequência | Reaproveita resultado existente; nunca publica |
+
+
+## Conferência pré-publicação (sem publicar)
+
+Após `run` e a confirmação de que a exportação terminou, use `preflight` com **nome, artista e duração do som observado no TikTok**. Esses dados não são obtidos automaticamente pelo script:
+
+```powershell
+node .\android-share\companion\editor-bridge.mjs preflight --tiktok-sound-title "My Life My Rules" --tiktok-sound-artist "URIYA ZION INGRAM" --tiktok-sound-seconds 19
+node --test .\android-share\companion\posting-checks.test.mjs
+```
+
+O exemplo de 19 segundos demonstra o bloqueio de um som insuficiente para um vídeo de 60 segundos; **não é autorização para postagem**. O retorno contém `blocking` e `manualReviewRequired`. `awaiting_manual_review` significa apenas que não foram detectados bloqueios nos metadados: ainda é indispensável revisar logo, MP4, reprodução completa, som, legenda e privacidade dentro do TikTok. O campo `canPublish` é sempre `false`.
+
+A conferência também impede prosseguir quando o vídeo não está vertical, o arquivo selecionado no editor não corresponde à fonte da primeira música da fila ou a exportação não está pronta. Não altera fila, APK, editor, rascunhos nem posts. **Somente a pessoa responsável decide e executa a publicação no TikTok.**
 
 O comando `run` reúne as etapas em uma chamada. Alternativamente, se `prepare` indicar `source_not_uploaded`, usar `upload` e depois `prepare`. A exportação é **assíncrona**: consultar `inspect` até o editor confirmar vídeo pronto e então chamar `download`. Quando o tempo de espera do `run` termina, a exportação continua no editor; não reenvie nem reexporte cegamente.
 
