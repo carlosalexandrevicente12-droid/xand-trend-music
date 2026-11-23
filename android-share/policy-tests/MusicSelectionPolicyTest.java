@@ -58,6 +58,9 @@ public final class MusicSelectionPolicyTest {
         assertDecision(MusicSelectionPolicy.Decision.NEEDS_VERIFICATION,
             candidate("invalid", "house", true, -1, 60, 1000L, 300L, ""),
             Collections.<MusicSelectionPolicy.PublishedSong>emptyList(), null);
+        if (!MusicSelectionPolicy.isConfirmedElectronicGenre("Bass House")) {
+            throw new AssertionError("Bass House deve ser aceito como eletrônico");
+        }
         if (!MusicSelectionPolicy.isConfirmedElectronicGenre("Música eletrônica")) {
             throw new AssertionError("Falha ao reconhecer rótulo eletrônico confirmado");
         }
