@@ -28,7 +28,7 @@ public final class MusicSelectionPolicy {
         new HashSet<>(Arrays.asList(
             "eletronica", "musica eletronica", "electronic", "electronic music",
             "electronica", "edm", "electronic dance music",
-            "house", "deep house", "tech house", "progressive house", "afro house",
+            "house", "deep house", "bass house", "tech house", "progressive house", "afro house",
             "melodic house", "organic house", "electro house", "future house",
             "techno", "melodic techno", "minimal techno", "hard techno",
             "trance", "psytrance", "progressive trance", "uplifting trance",
