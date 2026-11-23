@@ -1293,9 +1293,14 @@ void openPendingStepIfRequested(Intent incoming){
   options.add("Mover uma posição para baixo");
   options.add("Remover da fila");
   options.add("Abrir link original");
+  if(PHOTO_ONLY_CHANNEL){
+   options.add("Conferir música, gênero e duração");
+   options.add("Criar capa com ChatGPT");
+   options.add("Pesquisar imagem no Pinterest");
+  }
   options.add(PHOTO_ONLY_CHANNEL?"Abrir editor (outros trabalhos)":"Produzir no XAND MUSIC Editor");
   if(PHOTO_ONLY_CHANNEL)options.add("Vincular foto aprovada do celular");
-  if(chatImageSelected()&&!cover)options.add("Executar script no ChatGPT Chat");
+  if(!PHOTO_ONLY_CHANNEL&&chatImageSelected()&&!cover)options.add("Executar script no ChatGPT Chat");
   if(cover){options.add("Visualizar arte criada");if(!PHOTO_ONLY_CHANNEL||photoApproved)options.add(PHOTO_ONLY_CHANNEL?"Compartilhar foto e legenda":"Compartilhar arte e legenda");}
   if(!PHOTO_ONLY_CHANNEL&&!item.optString("video_uri","").isEmpty())options.add("Compartilhar vídeo MP4 e legenda");
   if(!PHOTO_ONLY_CHANNEL&&!item.optString("video_export_issue","").isEmpty())options.add("Tentar exportar vídeo novamente");
@@ -1307,6 +1312,9 @@ void openPendingStepIfRequested(Intent incoming){
     else if(w==1)moveInQueue(idx,1);
     else if(w==2)removeFromQueue(idx);
     else if(w==3)open(url);
+    else if("Conferir música, gênero e duração".equals(chosen))edit(url);
+    else if("Criar capa com ChatGPT".equals(chosen))sendArtworkPromptToChatGPT(url,true);
+    else if("Pesquisar imagem no Pinterest".equals(chosen))pinterest(url);
     else if("Produzir no XAND MUSIC Editor".equals(chosen)||"Abrir editor (outros trabalhos)".equals(chosen))openEditorFor(url);
     else if("Vincular foto aprovada do celular".equals(chosen))selectApprovedPhoto(url);
     else if("Executar script no ChatGPT Chat".equals(chosen))sendArtworkPromptToChatGPT(url,true);
