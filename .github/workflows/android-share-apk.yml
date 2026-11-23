@@ -25,7 +25,12 @@ jobs:
           java -cp /tmp/xand-policy-classes music.xand.share.MusicSelectionPolicyTest
       - name: Build APK
         working-directory: android-share
-        run: gradle assembleDebug --no-daemon
+        run: |
+          if [ "$GITHUB_REF_NAME" = "feature/electronic-curation-v07" ]; then
+            gradle assembleDebug --no-daemon -PxandIsolatedTest=true
+          else
+            gradle assembleDebug --no-daemon
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: xand-music-share-debug
