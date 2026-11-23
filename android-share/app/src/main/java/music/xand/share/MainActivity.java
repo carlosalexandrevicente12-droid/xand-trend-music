@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
  }
  void sendArtworkPromptToChatGPT(String url,boolean repeat){
   if(!isQueuedLink(url))return;
+  if(PHOTO_ONLY_CHANNEL&&!requireElectronicReady(url))return;
   if(!repeat&&prefs.getBoolean("chatgpt_handoff_"+url,false))return;
   JSONObject item=info(url);
   String title=item.optString("song","").trim(),artist=item.optString("artist","").trim();
@@ -115,7 +116,7 @@ public class MainActivity extends Activity {
      .remove("image_pending_"+url).remove("logo_pending_"+url)
      .remove("duration_pending_"+url).apply();
    show();
-   Toast.makeText(this,"Foto vinculada. Compartilhe no TikTok e salve em Rascunhos.",Toast.LENGTH_LONG).show();
+   Toast.makeText(this,"Foto vinculada. Confira música e duração antes de compartilhar.",Toast.LENGTH_LONG).show();
   }catch(Exception error){Toast.makeText(this,"Não foi possível vincular a foto.",Toast.LENGTH_LONG).show();}
  }
  void receiveSharedArtwork(Intent intent){
@@ -350,7 +351,7 @@ void openPendingStepIfRequested(Intent incoming){
  void durationOptions(String url){
   if(PHOTO_ONLY_CHANNEL){
    new AlertDialog.Builder(this).setTitle("Música no modo Foto")
-     .setMessage("A postagem usa uma única foto, sem MP4. No TikTok, escolha a música correta no catálogo e a versão completa ou o maior trecho permitido. A duração real é controlada pelo TikTok. Confira e salve em Rascunhos; não publique sem autorização.")
+     .setMessage("A postagem usa uma única foto, sem MP4. Escolha o áudio oficial no catálogo do TikTok e confirme um trecho reproduzível de pelo menos 60 segundos. Se o TikTok permitir menos, não prossiga. Não deixe rascunhos nem publique sem autorização.")
      .setPositiveButton("Entendi",null).show();
    return;
   }
@@ -540,8 +541,126 @@ void openPendingStepIfRequested(Intent incoming){
 
  JSONObject metadata(){try{return new JSONObject(prefs.getString("metadata","{}"));}catch(Exception e){return new JSONObject();}}
  JSONObject info(String url){JSONObject x=metadata().optJSONObject(url);return x==null?new JSONObject():x;}
+ Integer optionalSeconds(EditText field){String s=field.getText().toString().trim();return s.isEmpty()?null:Integer.valueOf(s);}
+ Long optionalCount(EditText field){String s=field.getText().toString().trim();return s.isEmpty()?null:Long.valueOf(s);}
+ void putOptional(JSONObject item,String key,Object value)throws JSONException{if(value==null)item.remove(key);else item.put(key,value);}
+ void addNumberField(LinearLayout parent,EditText field,String hint,Object value){
+  field.setHint(hint);field.setSingleLine(true);
+  field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+  if(value!=null)field.setText(String.valueOf(value));
+  parent.addView(field);
+ }
+ MusicSelectionPolicy.Candidate musicCandidate(String url){
+  JSONObject x=info(url);
+  return new MusicSelectionPolicy.Candidate(
+   x.optString("sound_id",""),x.optString("song",""),x.optString("artist",""),
+   x.optString("genre",""),x.optBoolean("genre_verified",false),
+   x.has("track_duration_seconds")?x.optInt("track_duration_seconds") : null,
+   x.has("tiktok_photo_duration_seconds")?x.optInt("tiktok_photo_duration_seconds") : null,
+   x.has("observed_views")?x.optLong("observed_views") : null,
+   x.has("observed_likes")?x.optLong("observed_likes") : null,
+   x.optString("metrics_source",""),x.optString("replaces_post_id",""));
+ }
+ java.util.List<MusicSelectionPolicy.PublishedSong> knownSongs(String url){
+  java.util.ArrayList<MusicSelectionPolicy.PublishedSong> known=new java.util.ArrayList<>();
+  java.util.HashSet<String> seen=new java.util.HashSet<>();
+  JSONArray queue=load(),history=resolved();
+  for(int group=0;group<2;group++){
+   JSONArray links=group==0?queue:history;
+   for(int i=0;i<links.length();i++){
+    String link=links.optString(i);
+    if(link.isEmpty()||link.equals(url)||!seen.add(link))continue;
+    JSONObject old=info(link);
+    String oldTitle=old.optString("song",""),oldArtist=old.optString("artist","");
+    String soundId=old.optString("sound_id","");
+    if(soundId.isEmpty()&&(oldTitle.isEmpty()||oldArtist.isEmpty()))continue;
+    known.add(new MusicSelectionPolicy.PublishedSong(link,soundId,oldTitle,oldArtist,
+     old.has("post_views")?old.optLong("post_views"):null));
+   }
+  }
+  return known;
+ }
+ MusicSelectionPolicy.Decision electronicDecision(String url){
+  // A fila resolvida não comprova postagem; é usada preventivamente como histórico.
+  // Reutilização por baixo desempenho continua bloqueada até confirmação da regra.
+  return MusicSelectionPolicy.validateSafety(musicCandidate(url),knownSongs(url),null);
+ }
+ boolean requireElectronicReady(String url){
+  MusicSelectionPolicy.Decision decision=electronicDecision(url);
+  if(decision==MusicSelectionPolicy.Decision.READY_FOR_OWNER_REVIEW)return true;
+  String reason;
+  if(decision==MusicSelectionPolicy.Decision.NON_ELECTRONIC)reason="O perfil XAND MUSIC aceita apenas música eletrônica verificada.";
+  else if(decision==MusicSelectionPolicy.Decision.TOO_SHORT)reason="A música e o tempo disponível no modo Foto devem ter pelo menos 60 segundos.";
+  else if(decision==MusicSelectionPolicy.Decision.ALREADY_USED)reason="Música já identificada na fila ou no histórico. Não repetir por enquanto.";
+  else reason="Confirme o título, artista, estilo eletrônico e as duas durações reais, sem valores presumidos.";
+  new AlertDialog.Builder(this).setTitle("Música ainda não liberada")
+   .setMessage(reason+"\n\nNenhuma imagem ou postagem será iniciada antes dessa conferência.")
+   .setNegativeButton("Voltar",null)
+   .setPositiveButton("Conferir dados",(d,w)->edit(url)).show();
+  return false;
+ }
  String field(JSONObject x,String key,String fallback){String s=x.optString(key,"").trim();return s.isEmpty()?fallback:s;}
- void edit(String url){JSONObject x=info(url);LinearLayout fields=new LinearLayout(this);fields.setOrientation(1);fields.setPadding(32,16,32,0);EditText song=new EditText(this);song.setHint("Nome da música");song.setSingleLine(true);song.setText(x.optString("song"));fields.addView(song);EditText artist=new EditText(this);artist.setHint("Artista");artist.setSingleLine(true);artist.setText(x.optString("artist"));fields.addView(artist);EditText genre=new EditText(this);genre.setHint("Estilo musical (opcional)");genre.setSingleLine(true);genre.setText(x.optString("genre"));fields.addView(genre);new AlertDialog.Builder(this).setTitle("Dados da música").setView(fields).setNegativeButton("Cancelar",null).setPositiveButton("Salvar",(d,w)->{try{JSONObject all=metadata();JSONObject info=all.optJSONObject(url);if(info==null)info=new JSONObject();info.put("song",song.getText().toString().trim());info.put("artist",artist.getText().toString().trim());info.put("genre",genre.getText().toString().trim());all.put(url,info);prefs.edit().putString("metadata",all.toString()).apply();show();if(prefs.getBoolean("review_pending_"+url,false)&&!song.getText().toString().trim().isEmpty()&&!artist.getText().toString().trim().isEmpty())confirmReview(url);}catch(Exception e){Toast.makeText(this,"Erro ao salvar",Toast.LENGTH_SHORT).show();}}).show();}
+ void edit(String url){
+  JSONObject x=info(url);
+  ScrollView scroll=new ScrollView(this);
+  LinearLayout fields=new LinearLayout(this);
+  fields.setOrientation(1);fields.setPadding(32,16,32,24);
+  scroll.addView(fields);
+  EditText song=new EditText(this);song.setHint("Nome da música");song.setSingleLine(true);
+  song.setText(x.optString("song"));fields.addView(song);
+  EditText artist=new EditText(this);artist.setHint("Artista");artist.setSingleLine(true);
+  artist.setText(x.optString("artist"));fields.addView(artist);
+  EditText genre=new EditText(this);genre.setHint("Gênero eletrônico (obrigatório)");genre.setSingleLine(true);
+  genre.setText(x.optString("genre"));fields.addView(genre);
+  CheckBox verified=new CheckBox(this);verified.setText("Conferi que este gênero é eletrônico");
+  verified.setChecked(x.optBoolean("genre_verified",false));fields.addView(verified);
+  EditText trackSeconds=new EditText(this);
+  addNumberField(fields,trackSeconds,"Duração do som no TikTok (segundos, mín. 60)",
+   x.has("track_duration_seconds")?x.optInt("track_duration_seconds"):null);
+  EditText photoSeconds=new EditText(this);
+  addNumberField(fields,photoSeconds,"Duração disponível em Foto (segundos, mín. 60)",
+   x.has("tiktok_photo_duration_seconds")?x.optInt("tiktok_photo_duration_seconds"):null);
+  EditText views=new EditText(this);
+  addNumberField(fields,views,"Visualizações observadas (opcional)",
+   x.has("observed_views")?x.optLong("observed_views"):null);
+  EditText likes=new EditText(this);
+  addNumberField(fields,likes,"Curtidas observadas (opcional)",
+   x.has("observed_likes")?x.optLong("observed_likes"):null);
+  EditText metricsSource=new EditText(this);metricsSource.setHint("Fonte das métricas (TikTok, etc.)");
+  metricsSource.setSingleLine(true);metricsSource.setText(x.optString("metrics_source"));
+  fields.addView(metricsSource);
+  EditText soundId=new EditText(this);soundId.setHint("ID do som no TikTok (opcional)");
+  soundId.setSingleLine(true);soundId.setText(x.optString("sound_id"));fields.addView(soundId);
+  new AlertDialog.Builder(this).setTitle("Dados e verificação da música")
+   .setView(scroll).setNegativeButton("Cancelar",null)
+   .setPositiveButton("Salvar",(d,w)->{
+    try{
+     Integer track=optionalSeconds(trackSeconds),photo=optionalSeconds(photoSeconds);
+     Long viewCount=optionalCount(views),likeCount=optionalCount(likes);
+     if((track!=null&&track<0)||(photo!=null&&photo<0)
+       ||(viewCount!=null&&viewCount<0)||(likeCount!=null&&likeCount<0)){
+      Toast.makeText(this,"Não use números negativos.",Toast.LENGTH_LONG).show();return;
+     }
+     JSONObject all=metadata(),item=all.optJSONObject(url);if(item==null)item=new JSONObject();
+     item.put("song",song.getText().toString().trim());
+     item.put("artist",artist.getText().toString().trim());
+     item.put("genre",genre.getText().toString().trim());
+     item.put("genre_verified",verified.isChecked());
+     putOptional(item,"track_duration_seconds",track);
+     putOptional(item,"tiktok_photo_duration_seconds",photo);
+     putOptional(item,"observed_views",viewCount);
+     putOptional(item,"observed_likes",likeCount);
+     item.put("metrics_source",metricsSource.getText().toString().trim());
+     item.put("sound_id",soundId.getText().toString().trim());
+     all.put(url,item);
+     prefs.edit().putString("metadata",all.toString()).apply();
+     show();
+     if(prefs.getBoolean("review_pending_"+url,false)
+       &&!song.getText().toString().trim().isEmpty()
+       &&!artist.getText().toString().trim().isEmpty())confirmReview(url);
+    }catch(Exception e){Toast.makeText(this,"Confira os números antes de salvar.",Toast.LENGTH_LONG).show();}
+   }).show();
+ }
 
  void identifyOptions(String url){
   String[] options={"Reconhecer a música ouvindo (Audile grátis)","Consultar informações públicas do TikTok","Informar ou corrigir título, artista e estilo","Confirmar dados e seguir para imagem","Abrir TikTok para ouvir"};
@@ -657,6 +776,7 @@ void openPendingStepIfRequested(Intent incoming){
  boolean hasImageAfterReview(){return hasConnectedStep("action_review","action_image");}
  void completeReview(String url){
   if(needsMetadata(url))return;
+  if(PHOTO_ONLY_CHANNEL&&!requireElectronicReady(url))return;
   prefs.edit().remove("review_pending_"+url).putBoolean("review_confirmed_"+url,true).apply();
   if(hasAutomaticImageNode()){continueCreativeAutomation(url);show();return;}
   if(hasImageAfterReview()&&info(url).optString("image_uri","").isEmpty()){
@@ -895,6 +1015,7 @@ void openPendingStepIfRequested(Intent incoming){
  }
  void continueCreativeAutomation(String url){
   if(!isQueuedLink(url))return;
+  if(PHOTO_ONLY_CHANNEL&&electronicDecision(url)!=MusicSelectionPolicy.Decision.READY_FOR_OWNER_REVIEW)return;
   try{
    JSONArray flows=new JSONObject(prefs.getString("workflows_v1","{}")).optJSONArray("flows");
    if(flows==null)return;
@@ -1096,9 +1217,9 @@ void openPendingStepIfRequested(Intent incoming){
  void shareText(String title,String value){Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/plain");send.putExtra(Intent.EXTRA_TEXT,value);startActivity(Intent.createChooser(send,title));}
  boolean needsMetadata(String url){JSONObject x=info(url);if(x.optString("song","").trim().isEmpty()||x.optString("artist","").trim().isEmpty()){Toast.makeText(this,"Preencha música e artista primeiro.",Toast.LENGTH_LONG).show();edit(url);return true;}return false;}
  String caption(String url){JSONObject x=info(url);String generated=x.optString("caption_auto","");if(!generated.isEmpty())return generated;String song=field(x,"song","Música não identificada"),artist=field(x,"artist","Artista não identificado"),genre=x.optString("genre","").trim();String result="🎵 "+song+" — "+artist;if(!genre.isEmpty())result+="\n🎧 Estilo: "+genre;return result+"\n\nQual sua parte favorita? 🎶\n\n#XANDMUSIC #TikTokMusic";}
- void prepareCaption(String url){if(needsMetadata(url))return;EditText input=new EditText(this);input.setText(caption(url));input.setMinLines(5);input.setGravity(android.view.Gravity.TOP);LinearLayout layout=new LinearLayout(this);layout.setPadding(28,12,28,0);layout.addView(input,new LinearLayout.LayoutParams(-1,-2));new AlertDialog.Builder(this).setTitle("Legenda para o TikTok").setView(layout).setNegativeButton("Voltar",null).setNeutralButton("Copiar",(d,w)->copyText("Legenda XAND",input.getText().toString())).setPositiveButton("Compartilhar",(d,w)->shareText("Enviar legenda",input.getText().toString())).show();}
+ void prepareCaption(String url){if(needsMetadata(url))return;if(PHOTO_ONLY_CHANNEL&&!requireElectronicReady(url))return;EditText input=new EditText(this);input.setText(caption(url));input.setMinLines(5);input.setGravity(android.view.Gravity.TOP);LinearLayout layout=new LinearLayout(this);layout.setPadding(28,12,28,0);layout.addView(input,new LinearLayout.LayoutParams(-1,-2));new AlertDialog.Builder(this).setTitle("Legenda para o TikTok").setView(layout).setNegativeButton("Voltar",null).setNeutralButton("Copiar",(d,w)->copyText("Legenda XAND",input.getText().toString())).setPositiveButton("Compartilhar",(d,w)->shareText("Enviar legenda",input.getText().toString())).show();}
  void pinterest(String url){if(needsMetadata(url))return;JSONObject x=info(url);String query=field(x,"song","")+" "+field(x,"artist","")+" "+field(x,"genre","")+" music cover art";open("https://www.pinterest.com/search/pins/?q="+Uri.encode(query.trim()));}
- void prepareArtwork(String url){if(needsMetadata(url))return;JSONObject x=info(url);String song=field(x,"song",""),artist=field(x,"artist",""),genre=field(x,"genre","estilo ainda não confirmado");String prompt="Crie uma arte vertical 9:16 para o perfil XAND MUSIC. Música: "+song+". Artista: "+artist+". Estilo: "+genre+". A imagem deve se inspirar na atmosfera da música, nunca em capturas de tela do TikTok. Incluir nome da música, artista, estilo e meu logotipo oficial XAND MUSIC completo, sem cortar ou alterar. Se eu ainda não tiver enviado a logo, peça o arquivo original antes de finalizar. Evite imagens repetidas, excesso de efeitos artificiais e padrões genéricos. Respeite os direitos de uso de imagens de terceiros. Gere uma proposta visual original.";shareText("Enviar instruções ao ChatGPT",prompt);}
+ void prepareArtwork(String url){if(needsMetadata(url))return;if(PHOTO_ONLY_CHANNEL&&!requireElectronicReady(url))return;JSONObject x=info(url);String song=field(x,"song",""),artist=field(x,"artist",""),genre=field(x,"genre","estilo ainda não confirmado");String prompt="Crie uma arte vertical 9:16 para o perfil XAND MUSIC. Música: "+song+". Artista: "+artist+". Estilo: "+genre+". A imagem deve se inspirar na atmosfera da música, nunca em capturas de tela do TikTok. Incluir nome da música, artista, estilo e meu logotipo oficial XAND MUSIC completo, sem cortar ou alterar. Se eu ainda não tiver enviado a logo, peça o arquivo original antes de finalizar. Evite imagens repetidas, excesso de efeitos artificiais e padrões genéricos. Respeite os direitos de uso de imagens de terceiros. Gere uma proposta visual original.";shareText("Enviar instruções ao ChatGPT",prompt);}
 
  boolean isSelected(String url){return prefs.getBoolean("selected_"+url,false);}
  void setSelected(String url,boolean selected){prefs.edit().putBoolean("selected_"+url,selected).apply();show();}
@@ -1135,6 +1256,7 @@ void openPendingStepIfRequested(Intent incoming){
   }catch(Exception ex){Toast.makeText(this,"Não foi possível abrir a arte.",Toast.LENGTH_LONG).show();}
  }
  void shareGeneratedCover(String url){
+  if(PHOTO_ONLY_CHANNEL&&!requireElectronicReady(url))return;
   JSONObject item=info(url);
   String uri=item.optString("generated_cover_uri","");
   if(uri.isEmpty())return;
@@ -1152,7 +1274,7 @@ void openPendingStepIfRequested(Intent incoming){
    send.setClipData(android.content.ClipData.newUri(getContentResolver(),"Arte XAND",cover));
    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
    startActivity(Intent.createChooser(send,"Foto XAND MUSIC para TikTok"));
-   if(PHOTO_ONLY_CHANNEL)Toast.makeText(this,"No TikTok, selecione a música completa e salve em Rascunhos.",Toast.LENGTH_LONG).show();
+   if(PHOTO_ONLY_CHANNEL)Toast.makeText(this,"No TikTok, confirme 60 segundos de áudio e solicite aprovação antes de publicar. Não deixe rascunhos.",Toast.LENGTH_LONG).show();
   }catch(Exception ex){Toast.makeText(this,"Falha ao compartilhar a arte.",Toast.LENGTH_LONG).show();}
  }
  void openEditorFor(String url){
@@ -1203,7 +1325,7 @@ void openPendingStepIfRequested(Intent incoming){
   brandNote.setPadding(0,4,0,8);root.addView(brandNote);
   TextView heading=label("MINHA FILA DE MÚSICAS",23,fg,true);
   heading.setPadding(0,18,0,6);root.addView(heading);
-  TextView intro=label(PHOTO_ONLY_CHANNEL?"Receba links, vincule uma foto aprovada e compartilhe no TikTok em modo Foto. Música e rascunho são conferidos no TikTok. Nenhuma publicação automática.":"Compartilhe os links pelo TikTok. Aqui você só organiza a lista e acompanha o andamento.",14,muted,false);
+  TextView intro=label(PHOTO_ONLY_CHANNEL?"Receba links, confira gênero eletrônico e áudio de 60 segundos ou mais, vincule uma foto aprovada e compartilhe em modo Foto. Sem publicação automática e sem novos rascunhos.":"Compartilhe os links pelo TikTok. Aqui você só organiza a lista e acompanha o andamento.",14,muted,false);
   intro.setPadding(0,0,0,20);root.addView(intro);
   JSONArray a=load(),history=resolved();
   TextView summary=label(a.length()+" na fila  •  "+history.length()+" concluída(s)",14,accent,true);
@@ -1271,7 +1393,7 @@ void openPendingStepIfRequested(Intent incoming){
   settings.setPadding(0,24,0,10);root.addView(settings);
   Button flow=action("⚙  Editar fluxo de nós",false);
   flow.setOnClickListener(v->startActivity(new Intent(this,WorkflowActivity.class)));root.addView(flow);
-  TextView note=label(PHOTO_ONLY_CHANNEL?"O fluxo prepara foto aprovada e legenda, sem MP4. No TikTok, escolha a música correta do catálogo e salve em Rascunhos. Não publica automaticamente. O editor continua acessível em Gerenciar → Abrir editor (outros trabalhos).":"O fluxo prepara arte e MP4. Para usar o editor instalado, abra Gerenciar → Produzir no XAND MUSIC Editor. No TikTok: áudio original 0% e música adicionada 100% (verificação pendente). Não publica automaticamente.",12,muted,false);
+  TextView note=label(PHOTO_ONLY_CHANNEL?"O fluxo prepara uma foto e legenda, sem MP4. Confirme o som eletrônico no TikTok e no mínimo 60 segundos. Não salve rascunhos nem publique automaticamente. O editor continua separado em Gerenciar → Abrir editor (outros trabalhos).":"O fluxo prepara arte e MP4. Para usar o editor instalado, abra Gerenciar → Produzir no XAND MUSIC Editor. No TikTok: áudio original 0% e música adicionada 100% (verificação pendente). Não publica automaticamente.",12,muted,false);
   note.setPadding(5,6,5,18);root.addView(note);
   if(history.length()>0){
    TextView historyTitle=label("Histórico de resolvidos",18,fg,true);historyTitle.setPadding(0,18,0,12);root.addView(historyTitle);
@@ -1285,3 +1407,4 @@ void openPendingStepIfRequested(Intent incoming){
  }
 
 }
+
