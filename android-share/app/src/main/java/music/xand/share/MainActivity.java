@@ -188,8 +188,48 @@ void openPendingStepIfRequested(Intent incoming){
   pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
   try{startActivityForResult(pick,logo?81:80);}catch(Exception e){Toast.makeText(this,"Seletor de imagens indisponível.",Toast.LENGTH_LONG).show();}
  }
+ void chooseAnalyticsHistory(){
+  Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+  pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("application/json");
+  pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  try{startActivityForResult(pick,84);}
+  catch(Exception error){Toast.makeText(this,"Seletor de histórico indisponível.",Toast.LENGTH_LONG).show();}
+ }
+ void importAnalyticsHistory(Uri source){
+  new Thread(()->{
+   try(java.io.InputStream input=getContentResolver().openInputStream(source)){
+    if(input==null)throw new IllegalArgumentException("Arquivo indisponível");
+    java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+    byte[] chunk=new byte[16384];int count;
+    while((count=input.read(chunk))!=-1){
+     if(bytes.size()+count>AnalyticsHistoryBridge.MAX_JSON_CHARS)throw new IllegalArgumentException("Arquivo acima de 1 MB");
+     bytes.write(chunk,0,count);
+    }
+    final String text=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+    final JSONObject merged=AnalyticsHistoryBridge.merge(prefs.getString("analytics_history_v1",""),text);
+    final int total=merged.getJSONArray("used").length();
+    runOnUiThread(()->new AlertDialog.Builder(this)
+     .setTitle("Conferir histórico do Analytics")
+     .setMessage(total+" referência(s) registradas como usadas ou possivelmente repetidas. "
+      +"A importação só acrescenta bloqueios de repetição; não modifica músicas na fila, fotos ou publicações. "
+      +"Este arquivo cobre apenas os registros do navegador que o exportou.")
+     .setNegativeButton("Cancelar",null)
+     .setPositiveButton("Importar",(d,w)->{
+      prefs.edit().putString("analytics_history_v1",merged.toString()).apply();
+      show();Toast.makeText(this,"Histórico consultável no Motorola.",Toast.LENGTH_LONG).show();
+     }).show());
+   }catch(Exception error){runOnUiThread(()->new AlertDialog.Builder(this)
+    .setTitle("Histórico não importado")
+    .setMessage("Arquivo incompatível ou inválido. Nenhum dado anterior foi alterado.")
+    .setPositiveButton("Entendi",null).show());}
+  }).start();
+ }
  @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
   super.onActivityResult(requestCode,resultCode,data);
+  if(requestCode==84){
+   if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)importAnalyticsHistory(data.getData());
+   return;
+  }
   if(requestCode==82){
    String url=pendingExportUrl;pendingExportUrl="";
    if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&!url.isEmpty())renderExport(url,data.getData());
@@ -561,7 +601,7 @@ void openPendingStepIfRequested(Intent incoming){
    x.has("observed_likes")?x.optLong("observed_likes") : null,
    x.optString("metrics_source",""),x.optString("replaces_post_id",""));
  }
- java.util.List<MusicSelectionPolicy.PublishedSong> knownSongs(String url){
+ java.util.List<MusicSelectionPolicy.PublishedSong> knownSongs(String url) throws JSONException {
   java.util.ArrayList<MusicSelectionPolicy.PublishedSong> known=new java.util.ArrayList<>();
   java.util.HashSet<String> seen=new java.util.HashSet<>();
   JSONArray queue=load(),history=resolved();
@@ -578,12 +618,14 @@ void openPendingStepIfRequested(Intent incoming){
      old.has("post_views")?old.optLong("post_views"):null));
    }
   }
+  known.addAll(AnalyticsHistoryBridge.blockedSongs(prefs.getString("analytics_history_v1","")));
   return known;
  }
  MusicSelectionPolicy.Decision electronicDecision(String url){
   // A fila resolvida não comprova postagem; é usada preventivamente como histórico.
   // Reutilização por baixo desempenho continua bloqueada até confirmação da regra.
-  return MusicSelectionPolicy.validateSafety(musicCandidate(url),knownSongs(url),null);
+  try{return MusicSelectionPolicy.validateSafety(musicCandidate(url),knownSongs(url),null);}
+  catch(JSONException invalidHistory){return MusicSelectionPolicy.Decision.NEEDS_VERIFICATION;}
  }
  boolean requireElectronicReady(String url){
   MusicSelectionPolicy.Decision decision=electronicDecision(url);
@@ -591,7 +633,7 @@ void openPendingStepIfRequested(Intent incoming){
   String reason;
   if(decision==MusicSelectionPolicy.Decision.NON_ELECTRONIC)reason="O perfil XAND MUSIC aceita apenas música eletrônica verificada.";
   else if(decision==MusicSelectionPolicy.Decision.TOO_SHORT)reason="A música e o tempo disponível no modo Foto devem ter pelo menos 60 segundos.";
-  else if(decision==MusicSelectionPolicy.Decision.ALREADY_USED)reason="Música já identificada na fila ou no histórico. Não repetir por enquanto.";
+  else if(decision==MusicSelectionPolicy.Decision.ALREADY_USED)reason="Música usada ou possivelmente repetida na fila ou no histórico Analytics. Não repetir por enquanto.";
   else reason="Confirme o título, artista, estilo eletrônico e as duas durações reais, sem valores presumidos.";
   new AlertDialog.Builder(this).setTitle("Música ainda não liberada")
    .setMessage(reason+"\n\nNenhuma imagem ou postagem será iniciada antes dessa conferência.")
@@ -1338,6 +1380,17 @@ void openPendingStepIfRequested(Intent incoming){
   JSONArray a=load(),history=resolved();
   TextView summary=label(a.length()+" na fila  •  "+history.length()+" concluída(s)",14,accent,true);
   summary.setPadding(0,2,0,18);root.addView(summary);
+  if(PHOTO_ONLY_CHANNEL){
+   String imported=prefs.getString("analytics_history_v1","");
+   String summaryText="Histórico Analytics: ainda não importado • verificação parcial";
+   if(!imported.isEmpty())try{
+    int n=AnalyticsHistoryBridge.validate(imported).getJSONArray("used").length();
+    summaryText="Histórico Analytics: "+n+" referência(s) importadas • cobertura parcial";
+   }catch(Exception error){summaryText="Histórico Analytics inválido • reimporte para liberar verificações";}
+   TextView analytics=label(summaryText,12,muted,false);analytics.setPadding(0,0,0,8);root.addView(analytics);
+   Button importButton=new Button(this);importButton.setText("Importar histórico do Analytics (JSON)");
+   importButton.setOnClickListener(v->chooseAnalyticsHistory());root.addView(importButton);
+  }
   if(a.length()==0){
    TextView empty=label("Fila vazia. No TikTok, toque em Compartilhar → XAND MUSIC para adicionar uma música.",14,muted,false);
    empty.setPadding(18,24,18,24);empty.setBackground(shape(panel,22,stroke));root.addView(empty);
