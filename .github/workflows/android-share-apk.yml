@@ -2,7 +2,7 @@ name: Android share APK
 on:
   workflow_dispatch:
   push:
-    branches: [feature/android-share-queue, fix/photo-only-v07]
+    branches: [feature/android-share-queue, fix/photo-only-v07, feature/electronic-curation-v07]
     paths: ['android-share/**', '.github/workflows/android-share-apk.yml']
 jobs:
   build:
@@ -16,6 +16,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Verify music policy
+        run: |
+          mkdir -p /tmp/xand-policy-classes
+          javac -d /tmp/xand-policy-classes \
+            android-share/app/src/main/java/music/xand/share/MusicSelectionPolicy.java \
+            android-share/policy-tests/MusicSelectionPolicyTest.java
+          java -cp /tmp/xand-policy-classes music.xand.share.MusicSelectionPolicyTest
       - name: Build APK
         working-directory: android-share
         run: gradle assembleDebug --no-daemon
