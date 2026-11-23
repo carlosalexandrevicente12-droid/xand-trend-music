@@ -45,7 +45,7 @@ svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflo
 <button data-type="action_review"><b>✓ Validar créditos</b><small>Segue sozinho com créditos confiáveis; senão, aguarda sua confirmação</small></button>
 <button data-type="action_image"><b>▧ Criar imagem</b><small>ChatGPT Chat por script ou escolha manual (Pinterest)</small></button>
 <button data-type="action_logo"><b>◈ Posicionar logo</b><small>Arrastar e ajustar tamanho, mantendo a logo completa</small></button>
-<button data-type="action_duration"><b>◷ Música no TikTok</b><small>Usar versão completa ou maior trecho permitido no modo Foto</small></button>
+<button data-type="action_duration"><b>◷ Música no TikTok</b><small>Confirmar áudio eletrônico e pelo menos 60 s no modo Foto</small></button>
 <button data-type="action_caption"><b>✎ Criar legenda</b><small>Nome, artista, estilo e pergunta para engajar</small></button>
 <button data-type="action_copy"><b>⧉ Copiar link</b><small>Deixa o link pronto para colar em outro app</small></button>
 <button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o TikTok quando o link chega</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Roda comandos que você salvou em Scripts</small></button>
@@ -66,7 +66,7 @@ const TYPES={
  action_review:{name:'Validar créditos',description:'Segue com créditos confiáveis; solicita confirmação quando faltar informação',kind:'action'},
  action_image:{name:'Criar arte',description:'ChatGPT Chat via script ou foto aprovada',kind:'action'},
  action_logo:{name:'Posicionar logo',description:'Logo completa embaixo, sem cobrir título e artista',kind:'action'},
- action_duration:{name:'Música no TikTok',description:'Sem MP4: maior duração permitida pelo TikTok',kind:'action'},
+ action_duration:{name:'Música no TikTok',description:'Sem MP4: áudio eletrônico por pelo menos 60 segundos',kind:'action'},
  action_caption:{name:'Criar legenda',description:'Monta uma legenda sem inventar créditos',kind:'action'},
  action_copy:{name:'Copiar link',description:'Copia para a área de transferência',kind:'action'},
  action_open:{name:'Abrir TikTok',description:'Abre o aplicativo TikTok',kind:'action'},
@@ -141,7 +141,7 @@ function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.ena
  }
  if(n.type==='action_duration'){
   const label=document.createElement('small');
-  label.textContent='Modo Foto: escolha no TikTok a versão completa da música ou o maior trecho permitido. Nenhum vídeo será gerado.';
+  label.textContent='Modo Foto: confirme áudio eletrônico com no mínimo 60 segundos no TikTok. Se não houver 60 segundos, não prossiga. Nenhum vídeo será gerado.';
   body.append(label);
  }
  el.append(head,body);
