@@ -1334,12 +1334,27 @@ void openPendingStepIfRequested(Intent incoming){
    TextView empty=label("Fila vazia. No TikTok, toque em Compartilhar → XAND MUSIC para adicionar uma música.",14,muted,false);
    empty.setPadding(18,24,18,24);empty.setBackground(shape(panel,22,stroke));root.addView(empty);
   }
+  java.util.ArrayList<MusicSelectionPolicy.Candidate> candidates=new java.util.ArrayList<>();
+  java.util.Map<MusicSelectionPolicy.Candidate,String> sources=new java.util.IdentityHashMap<>();
+  for(int j=0;j<a.length();j++){
+   String link=a.optString(j);
+   if(!PHOTO_ONLY_CHANNEL||electronicDecision(link)!=MusicSelectionPolicy.Decision.READY_FOR_OWNER_REVIEW)continue;
+   MusicSelectionPolicy.Candidate candidate=musicCandidate(link);
+   candidates.add(candidate);sources.put(candidate,link);
+  }
+  java.util.Map<String,Integer> priority=new java.util.HashMap<>();
+  java.util.List<MusicSelectionPolicy.Candidate> sorted=
+   MusicSelectionPolicy.rankForReview(candidates,java.util.Collections.emptyList(),null);
+  for(int j=0;j<sorted.size();j++)priority.put(sources.get(sorted.get(j)),j+1);
   for(int i=0;i<a.length();i++){
    final int index=i;String url=a.optString(i);JSONObject item=info(url);
    LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(22,18,22,18);
    card.setBackground(shape(panel,24,stroke));
    LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.bottomMargin=15;root.addView(card,cp);
-   TextView order=label(i==0?"01  •  PRÓXIMA MÚSICA":String.format(java.util.Locale.ROOT,"%02d  •  NA FILA",i+1),12,accent,true);
+   Integer rank=priority.get(url);
+   String headingText=rank==null?(i==0?"01  •  PRIMEIRA DA FILA":String.format(java.util.Locale.ROOT,"%02d  •  NA FILA",i+1))
+    :String.format(java.util.Locale.ROOT,"PRIORIDADE %02d  •  CURTIDAS OU VISUALIZAÇÕES",rank);
+   TextView order=label(headingText,12,accent,true);
    card.addView(order);
    String title=item.optString("song","").trim(),artist=item.optString("artist","").trim();
    TextView music=label(title.isEmpty()?"Música ainda não identificada":title,18,fg,true);
@@ -1349,7 +1364,12 @@ void openPendingStepIfRequested(Intent incoming){
    if(!genre.isEmpty()){TextView g=label("Estilo: "+genre,12,muted,false);g.setPadding(0,4,0,0);card.addView(g);}
    String state;
    boolean photoApproved="user_approved".equals(item.optString("photo_review_status",""));
-   if(PHOTO_ONLY_CHANNEL&&photoApproved&&!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Foto aprovada e legenda prontas • compartilhar em Gerenciar";
+   MusicSelectionPolicy.Decision eligibility=PHOTO_ONLY_CHANNEL?electronicDecision(url):MusicSelectionPolicy.Decision.READY_FOR_OWNER_REVIEW;
+   if(PHOTO_ONLY_CHANNEL&&eligibility==MusicSelectionPolicy.Decision.NON_ELECTRONIC)state="Bloqueada • gênero fora de música eletrônica";
+   else if(PHOTO_ONLY_CHANNEL&&eligibility==MusicSelectionPolicy.Decision.TOO_SHORT)state="Bloqueada • faixa ou Foto com menos de 60 segundos";
+   else if(PHOTO_ONLY_CHANNEL&&eligibility==MusicSelectionPolicy.Decision.ALREADY_USED)state="Bloqueada • música duplicada na fila ou histórico";
+   else if(PHOTO_ONLY_CHANNEL&&eligibility!=MusicSelectionPolicy.Decision.READY_FOR_OWNER_REVIEW)state="Aguardando verificação do gênero eletrônico e durações";
+   else if(PHOTO_ONLY_CHANNEL&&photoApproved&&!item.optString("generated_cover_uri","").isEmpty()&&!item.optString("caption_auto","").isEmpty())state="Foto aprovada e legenda prontas • compartilhar em Gerenciar";
    else if(PHOTO_ONLY_CHANNEL&&!item.optString("generated_cover_uri","").isEmpty()&&!photoApproved)state="Foto antiga ou pendente • vincule a versão aprovada";
    else if(PHOTO_ONLY_CHANNEL&&photoApproved&&!item.optString("generated_cover_uri","").isEmpty())state="Foto aprovada • preparar legenda";
    else if(PHOTO_ONLY_CHANNEL&&prefs.getBoolean("chatgpt_handoff_"+url,false))state="Aguardando foto do ChatGPT";
