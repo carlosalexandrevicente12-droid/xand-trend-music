@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>XAND • Automações</title>
+<style>
+:root{color-scheme:dark;--bg:#090909;--card:#151515;--panel:#1c1c1c;--orange:#ff8500;--muted:#aaa;--stroke:#343434;--fg:#f5f5f5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--fg)}
+header{padding:18px 18px 15px;border-bottom:1px solid var(--stroke);background:#101010}
+.brand{font-size:20px;font-weight:900;letter-spacing:-.7px}.brand span{color:var(--orange)}.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:13px 17px;border-bottom:1px solid var(--stroke)}
+button,select,input{font:inherit;color:var(--fg)}button{cursor:pointer;border:1px solid #454545;background:#262626;border-radius:9px;padding:9px 12px;min-height:39px;font-weight:700}
+button.primary{background:var(--orange);border-color:var(--orange);color:#211105}
+button:focus-visible,select:focus-visible{outline:2px solid var(--orange)}
+select{padding:9px 12px;min-width:150px;max-width:100%;border:1px solid var(--stroke);border-radius:9px;background:#181818}
+.main{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:65vh}
+aside{padding:15px;border-right:1px solid var(--stroke);background:#111}
+.smalltitle{color:#ffae57;font-size:11px;font-weight:900;letter-spacing:1.1px;margin:0 0 12px}
+.palette{display:grid;gap:9px;margin-bottom:22px}.palette button{text-align:left;background:#1c1c1c;border-color:#383838}
+.palette button b{display:block;font-size:13px}.palette button small{display:block;color:#a6a6a6;font-size:11px;font-weight:400;margin-top:3px}
+.help{font-size:12px;color:#aaa;line-height:1.6}.help p{margin:0 0 10px}
+.stage{min-width:0;display:flex;flex-direction:column;background:#0b0b0b}.stagebar{padding:11px 15px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #303030}
+.stagebar label{font-weight:700}.stagebar small{color:#999}
+.viewport{overflow:auto;max-height:65vh;min-height:430px;touch-action:pan-x pan-y}
+.board{position:relative;width:1100px;height:1000px;background-color:#0d0d0d;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:22px 22px}
+svg{position:absolute;inset:0;pointer-events:none;width:100%;height:100%;overflow:visible}
+.node{position:absolute;width:205px;min-height:103px;border:1px solid #545454;border-radius:13px;background:#191919;box-shadow:0 8px 28px #0009;overflow:hidden}
+.node.trigger{border-color:#c97929}.node-header{background:#242424;color:#ffb566;padding:10px 12px;font-weight:900;display:flex;align-items:center;gap:6px;touch-action:none;cursor:grab;user-select:none}
+.node-header:active{cursor:grabbing}.node-body{padding:10px 12px;color:#c4c4c4;font-size:11px}
+.node .remove{margin-left:auto;min-height:26px;padding:0 8px;border-radius:6px;font-size:16px;background:#351a1a;border-color:#5f2828;color:#ffc5c5}
+.node.selected{outline:3px solid #ff8500}.node.valid{border-color:var(--orange)}
+.node-number{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid #ad7134;border-radius:50%;font-size:10px}
+.guide{margin:12px 17px;padding:12px 14px;background:#1d1a16;border:1px solid #70451e;border-radius:11px;font-size:12px;color:#ddd}.guide b{color:#ffae57}.guide p{margin:4px 0}.bottom{padding:14px 17px;border-top:1px solid var(--stroke);display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.status{font-size:12px;color:#ffbc77;min-height:18px}.tog{display:flex;align-items:center;gap:8px}.tog input{accent-color:#ff8500;width:18px;height:18px}
+@media(max-width:800px){.main{display:flex;flex-direction:column}.stage{order:0}aside{order:1;border-right:0;border-top:1px solid var(--stroke);border-bottom:0}.palette{grid-template-columns:1fr 1fr}.viewport{height:55vh;min-height:365px}.toolbar select{flex:1}.stagebar small{flex-basis:100%}}
+</style></head>
+<body>
+<header><div class="brand">XAND <span>AUTOMAÇÕES</span></div><p class="hint">Comece com um modelo pronto ou monte os nós. Todas as ferramentas continuam disponíveis.</p></header>
+<div class="guide"><b>Como entender os nós:</b><p>Gatilho = quando começa. Ação = o que o celular faz. Linha laranja = em que ordem acontece.</p><p>Com créditos confirmados, cria a legenda e usa um script para enviar o pedido de imagem ao ChatGPT Chat. Compartilhe a imagem gerada de volta com XAND MUSIC. A troca com o ChatGPT exige ação na conversa; publicação automática ainda não está integrada.</p></div>
+<div class="toolbar"><select id="flowList" aria-label="Selecionar automação"></select><button id="template" class="primary" type="button">Completar fluxo de criação</button><button id="new">+ Nova automação</button><button id="rename">Renomear</button><button id="save" class="primary">Salvar fluxos</button><button id="scripts" type="button">Scripts</button></div>
+<div class="main">
+<aside><h2 class="smalltitle">GATILHOS</h2><div class="palette"><button data-type="trigger_share"><b>⤵ Receber link TikTok</b><small>Inicia ao usar Compartilhar → XAND MUSIC no TikTok</small></button></div>
+<h2 class="smalltitle">AÇÕES</h2><div class="palette">
+<button data-type="action_queue"><b>▤ Guardar na fila</b><small>Salva o link sem repetir. Não publica nada.</small></button>
+<button data-type="action_notify"><b>◉ Aviso na tela</b><small>Confirma na tela que o link chegou</small></button>
+<button data-type="action_identify"><b>♫ Consultar música</b><small>Procura título e artista nos créditos públicos (pode ficar sem resposta)</small></button>
+<button data-type="action_review"><b>✓ Validar créditos</b><small>Segue sozinho com créditos confiáveis; senão, aguarda sua confirmação</small></button>
+<button data-type="action_image"><b>▧ Criar imagem</b><small>ChatGPT Chat por script ou escolha manual (Pinterest)</small></button>
+<button data-type="action_logo"><b>◈ Posicionar logo</b><small>Arrastar e ajustar tamanho, mantendo a logo completa</small></button>
+<button data-type="action_duration"><b>◷ Música no TikTok</b><small>Usar versão completa ou maior trecho permitido no modo Foto</small></button>
+<button data-type="action_caption"><b>✎ Criar legenda</b><small>Nome, artista, estilo e pergunta para engajar</small></button>
+<button data-type="action_copy"><b>⧉ Copiar link</b><small>Deixa o link pronto para colar em outro app</small></button>
+<button data-type="action_open"><b>↗ Abrir TikTok</b><small>Abre o TikTok quando o link chega</small></button><button data-type="action_script"><b>⌘ Executar script</b><small>Roda comandos que você salvou em Scripts</small></button>
+</div><div class="help"><p><b>Para montar do zero:</b></p><p>1. Adicione um gatilho e as ações desejadas.</p><p>2. Toque em <b>Conectar nós</b> e selecione de onde sai e para onde vai a linha.</p><p>3. Marque <b>Ativa</b> e toque em <b>Salvar fluxos</b>.</p><p>Você pode arrastar os nós pelo título.</p></div></aside>
+<section class="stage" aria-label="Quadro de automação">
+<div class="stagebar"><strong style="color:#ffae57">SEU FLUXO DE NÓS</strong><small>Deslize o quadro para os lados para ver as próximas etapas.</small><button id="connect">Conectar nós</button><button id="removeConnections">Remover conexões</button><label class="tog"><input id="enabled" type="checkbox"> Ativa</label><small>O fluxo é executado ao compartilhar um link.</small></div>
+<div class="viewport"><div class="board" id="board"><svg id="wires" viewBox="0 0 1100 1000" aria-hidden="true"></svg></div></div>
+<div class="bottom"><button id="pending" class="primary">Continuar etapa pendente</button><button id="test">Verificar fluxo</button><span class="status" id="status" role="status"></span></div>
+</section></div>
+<script>
+(() => {
+'use strict';
+const TYPES={
+ trigger_share:{name:'Receber link TikTok',description:'Gatilho: link compartilhado',kind:'trigger'},
+ action_queue:{name:'Guardar na fila',description:'Registra sem duplicar',kind:'action'},
+ action_notify:{name:'Aviso na tela',description:'Mostra confirmação',kind:'action'},
+ action_identify:{name:'Consultar música',description:'Consulta créditos públicos sem inventar artista',kind:'action'},
+ action_review:{name:'Validar créditos',description:'Segue com créditos confiáveis; solicita confirmação quando faltar informação',kind:'action'},
+ action_image:{name:'Criar arte',description:'ChatGPT Chat via script ou foto aprovada',kind:'action'},
+ action_logo:{name:'Posicionar logo',description:'Logo completa embaixo, sem cobrir título e artista',kind:'action'},
+ action_duration:{name:'Música no TikTok',description:'Sem MP4: maior duração permitida pelo TikTok',kind:'action'},
+ action_caption:{name:'Criar legenda',description:'Monta uma legenda sem inventar créditos',kind:'action'},
+ action_copy:{name:'Copiar link',description:'Copia para a área de transferência',kind:'action'},
+ action_open:{name:'Abrir TikTok',description:'Abre o aplicativo TikTok',kind:'action'},
+ action_script:{name:'Executar script',description:'Escolha um script salvo',kind:'action'}
+};
+const $=id=>document.getElementById(id);
+const bridge=window.Xand;
+let flows=[],index=0,linking=false,source=null;
+function uid(){return 'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function fresh(){let id=uid();return {id:uid(),name:'Nova automação',enabled:false,nodes:[{id,type:'trigger_share',x:36,y:80}],edges:[]}}
+function current(){return flows[index]}
+function notify(v){$('status').textContent=v}
+function scriptsAvailable(){try{return JSON.parse(bridge?.scripts()||'{}').scripts||[]}catch(e){return []}}
+function persist(){try{let reply=bridge?.save(JSON.stringify({version:1,flows}));notify(reply==='OK'?'Automações salvas no Motorola.':(reply||'Não foi possível salvar.'))}catch(e){notify('Erro ao salvar os fluxos.')}}
+function list(){let picker=$('flowList');picker.replaceChildren();flows.forEach((flow,i)=>{let opt=document.createElement('option');opt.value=String(i);opt.textContent=flow.name;picker.append(opt)});picker.value=String(index)}
+function show(){let f=current();if(!f)return;list();$('enabled').checked=!!f.enabled;let board=$('board');board.querySelectorAll('.node').forEach(el=>el.remove());
+ f.nodes.forEach(n=>{let t=TYPES[n.type];if(!t)return;let el=document.createElement('div');el.className='node '+(t.kind==='trigger'?'trigger':'');el.style.left=n.x+'px';el.style.top=n.y+'px';el.dataset.id=n.id;
+ let head=document.createElement('div');head.className='node-header';let icon=document.createElement('span');icon.className='node-number';icon.textContent=t.kind==='trigger'?'▶':'●';let name=document.createElement('span');name.textContent=t.name;let remove=document.createElement('button');remove.className='remove';remove.textContent='×';remove.setAttribute('aria-label','Remover nó');remove.onclick=()=>{f.nodes=f.nodes.filter(x=>x.id!==n.id);f.edges=f.edges.filter(e=>e.from!==n.id&&e.to!==n.id);show();notify('Nó removido. Salve para manter a alteração.')};
+ head.append(icon,name,remove);let body=document.createElement('div');body.className='node-body';body.textContent=t.description;
+ if(n.type==='action_script'){
+  let select=document.createElement('select');select.style.cssText='width:100%;margin-top:6px;font-size:11px';
+  let options=scriptsAvailable();let placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Selecione um script';select.append(placeholder);
+  options.forEach(script=>{let option=document.createElement('option');option.value=script.id;option.textContent=script.name;select.append(option)});
+  select.value=n.scriptId||'';select.onclick=e=>e.stopPropagation();select.onchange=e=>{n.scriptId=e.target.value;notify('Script atribuído. Salve o fluxo.')};body.append(select);
+ }
+ if(n.type==='action_review'){
+  const label=document.createElement('small');label.textContent='Quando continuar';body.append(label);
+  const mode=document.createElement('select');mode.style.cssText='width:100%;font-size:11px';
+  [['auto_verified','Automático se verificado'],['manual','Exigir confirmação sempre']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;mode.append(o)});
+  mode.value=n.review_mode||'auto_verified';mode.onclick=e=>e.stopPropagation();
+  mode.onchange=e=>{n.review_mode=mode.value;notify('Regra de créditos alterada. Salve o fluxo.')};body.append(mode);
+ }
+ if(n.type==='action_image'){
+  const label=document.createElement('small');label.textContent='Origem da arte';body.append(label);
+  const source=document.createElement('select');source.style.cssText='width:100%;font-size:11px';
+  [['chatgpt_chat','ChatGPT Chat por script'],['generated_local','Legado: arte local desativada para o canal'],['manual','Pinterest / escolha manual']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;source.append(o)});
+  source.value=n.image_source||'chatgpt_chat';source.onclick=e=>e.stopPropagation();
+  body.append(source);
+  const styleLabel=document.createElement('small');styleLabel.textContent='Variação visual';body.append(styleLabel);
+  const style=document.createElement('select');style.style.cssText='width:100%;font-size:11px';
+  [['auto','Variar automaticamente'],['orbitas','Órbitas luminosas'],['ondas','Ondas eletrônicas'],['prismas','Prismas geométricos'],['grade','Grade neon']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;style.append(o)});
+  style.value=n.art_style||'auto';style.onclick=e=>e.stopPropagation();
+  style.onchange=e=>{n.art_style=style.value;notify('Estilo alterado. Salve o fluxo.')};
+  body.append(style);
+  source.onchange=e=>{n.image_source=source.value;styleLabel.hidden=style.hidden=source.value!=='generated_local';notify('Origem da arte alterada. Salve o fluxo.')};
+  styleLabel.hidden=style.hidden=source.value!=='generated_local';
+ }
+ if(n.type==='action_caption'){
+  const label=document.createElement('small');label.textContent='Estilo da legenda';body.append(label);
+  const mode=document.createElement('select');mode.style.cssText='width:100%;font-size:11px';
+  [['engagement','Pergunta para engajar'],['info','Informativa'],['minimal','Minimalista']].forEach(([v,t])=>{
+    let o=document.createElement('option');o.value=v;o.textContent=t;mode.append(o)});
+  mode.value=n.caption_mode||'engagement';mode.onclick=e=>e.stopPropagation();
+  mode.onchange=e=>{n.caption_mode=mode.value;notify('Legenda ajustada. Salve o fluxo.')};body.append(mode);
+ }
+ if(n.type==='action_logo'){
+  const logoButton=document.createElement('button');logoButton.type='button';logoButton.textContent='Registrar logo oficial';logoButton.style.cssText='width:100%;margin:7px 0;font-size:11px';logoButton.onclick=e=>{e.stopPropagation();bridge?.selectLogo();};body.append(logoButton);
+ const label=document.createElement('small');label.textContent='Posição automática';body.append(label);
+  const choice=document.createElement('select');choice.style.cssText='width:100%;font-size:11px';
+  [['rightTop','Superior direita'],['centerTop','Superior centro'],['rightBottom','Inferior direita'],['centerBottom','Inferior centro']].forEach(([value,title])=>{
+    let o=document.createElement('option');o.value=value;o.textContent=title;choice.append(o);
+  });
+  choice.value=n.placement||'centerBottom';choice.onclick=e=>e.stopPropagation();
+  choice.onchange=e=>{n.placement=e.target.value;notify('Posição padrão alterada. Salve o fluxo.');};body.append(choice);
+  const size=document.createElement('select');size.style.cssText='width:100%;margin-top:5px;font-size:11px';
+  [25,35,38,45,55].forEach(v=>{let o=document.createElement('option');o.value=String(v);o.textContent='Logo: '+v+'% da largura';size.append(o)});
+  size.value=String(n.logo_width_pct||38);size.onclick=e=>e.stopPropagation();
+  size.onchange=e=>{n.logo_width_pct=Number(size.value);notify('Tamanho padrão alterado. Salve o fluxo.');};body.append(size);
+ }
+ if(n.type==='action_duration'){
+  const label=document.createElement('small');
+  label.textContent='Modo Foto: escolha no TikTok a versão completa da música ou o maior trecho permitido. Nenhum vídeo será gerado.';
+  body.append(label);
+ }
+ el.append(head,body);
+ el.onclick=()=>{if(!linking)return;if(!source){source=n.id;el.classList.add('selected');notify('Agora toque no nó de destino.')}else{if(source!==n.id&&!f.edges.some(e=>e.from===source&&e.to===n.id)){f.edges.push({from:source,to:n.id});notify('Conexão criada. Salve os fluxos.')}else notify('Conexão não adicionada.');linking=false;source=null;$('connect').textContent='Conectar nós';show()}};
+ let x0,y0,originX,originY,dragging=false;head.addEventListener('pointerdown',ev=>{if(ev.target===remove||linking)return;dragging=true;x0=ev.clientX;y0=ev.clientY;originX=n.x;originY=n.y;head.setPointerCapture(ev.pointerId);ev.preventDefault()});head.addEventListener('pointermove',ev=>{if(!dragging)return;n.x=Math.max(10,Math.min(880,originX+ev.clientX-x0));n.y=Math.max(10,Math.min(780,originY+ev.clientY-y0));el.style.left=n.x+'px';el.style.top=n.y+'px';wires()});head.addEventListener('pointerup',()=>{if(dragging){dragging=false;notify('Posição atualizada. Salve os fluxos.')}});board.append(el)});
+ wires();
+}
+function wires(){let f=current();let svg=$('wires');svg.replaceChildren();f.edges.forEach(edge=>{let a=f.nodes.find(x=>x.id===edge.from),b=f.nodes.find(x=>x.id===edge.to);if(!a||!b)return;let p=document.createElementNS('http://www.w3.org/2000/svg','path');let ax=a.x+205,ay=a.y+46,bx=b.x,by=b.y+46;let mid=(ax+bx)/2;p.setAttribute('d', 'M'+ax+' '+ay+' C'+mid+' '+ay+' '+mid+' '+by+' '+bx+' '+by);p.setAttribute('fill','none');p.setAttribute('stroke','#ff8500');p.setAttribute('stroke-width','3');svg.append(p);let c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',String(bx));c.setAttribute('cy',String(by));c.setAttribute('r','5');c.setAttribute('fill','#ff8500');svg.append(c)})}
+document.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{let f=current(),type=b.dataset.type,n={id:uid(),type,x:Math.min(820,35+f.nodes.length*60),y:Math.min(490,45+f.nodes.length*72)};if(f.nodes.length>=30){notify('Limite de 30 nós.');return}if(type==='action_script')n.scriptId=scriptsAvailable()[0]?.id||'';f.nodes.push(n);show();notify('Nó adicionado. Conecte e salve.')});
+function connectIfMissing(f,from,to){
+ if(from&&to&&!f.edges.some(e=>e.from===from.id&&e.to===to.id))f.edges.push({from:from.id,to:to.id});
+}
+function appendStages(f){
+ const types=['action_identify','action_review','action_image','action_logo','action_duration','action_caption'];
+ const positions=[{x:690,y:295},{x:360,y:295},{x:30,y:295},{x:30,y:495},{x:360,y:495},{x:690,y:495}];
+ let previous=f.nodes.find(n=>n.type==='action_notify')||f.nodes.find(n=>n.type==='action_queue');
+ types.forEach((type,i)=>{
+  let node=f.nodes.find(n=>n.type===type);
+  if(!node){node={id:uid(),type,...positions[i]};f.nodes.push(node);}
+  connectIfMissing(f,previous,node);previous=node;
+ });
+ const chat=scriptsAvailable().find(s=>s.id==='xand_chatgpt_art_script_v1');
+ if(chat){
+  let script=f.nodes.find(n=>n.type==='action_script'&&n.scriptId===chat.id);
+  if(!script){script={id:uid(),type:'action_script',scriptId:chat.id,x:690,y:700};f.nodes.push(script);}
+  connectIfMissing(f,previous,script);
+ }
+ f.enabled=true;
+}
+$('template').onclick=()=>{
+ const names=['Entrada TikTok • guardar e avisar','TikTok • identificar e escolher capa','TikTok • criação visual e duração','TikTok • foto e música'];
+ const name=names[3];
+ const existing=flows.findIndex(f=>names.includes(f.name));
+ if(existing>=0){
+  index=existing;const f=current();
+  if(['action_identify','action_review','action_image','action_logo','action_duration','action_caption'].every(type=>f.nodes.some(n=>n.type===type))){show();notify('Nove etapas disponíveis. Ajuste cada nó conforme sua preferência.');return}
+  if(!confirm('Adicionar a etapa de legenda ao fluxo? Os nós existentes serão mantidos.'))return;
+  appendStages(f);f.name=name;show();persist();return;
+ }
+ if(flows.length>=20){notify('Limite de 20 automações.');return}
+ const a=uid(),b=uid(),c=uid();
+ const f={id:uid(),name,enabled:true,nodes:[{id:a,type:'trigger_share',x:30,y:95},{id:b,type:'action_queue',x:360,y:95},{id:c,type:'action_notify',x:690,y:95}],edges:[{from:a,to:b},{from:b,to:c}]};
+ appendStages(f);flows.push(f);index=flows.length-1;show();persist();
+};
+$('new').onclick=()=>{if(flows.length>=20){notify('Limite de 20 automações.');return}flows.push(fresh());index=flows.length-1;show();notify('Automação criada. Configure e salve.')};
+$('rename').onclick=()=>{let name=prompt('Nome da automação:',current().name);if(name!==null){current().name=name.trim().slice(0,60)||'Sem nome';show();notify('Nome atualizado. Salve os fluxos.')}};
+$('flowList').onchange=()=>{index=Number($('flowList').value)||0;linking=false;source=null;show()};
+$('enabled').onchange=()=>{current().enabled=$('enabled').checked;notify('Estado alterado. Salve os fluxos.')};
+$('connect').onclick=()=>{linking=!linking;source=null;$('connect').textContent=linking?'Cancelar conexão':'Conectar nós';show();notify(linking?'Toque no nó de origem e depois no destino.':'Conexão cancelada.')};
+$('removeConnections').onclick=()=>{if(confirm('Remover todas as conexões desta automação?')){current().edges=[];show();notify('Conexões removidas. Salve os fluxos.')}};
+$('save').onclick=persist;
+$('scripts').onclick=()=>bridge?.openScripts();
+window.addEventListener('focus',()=>{if(flows.length)show()});
+$('test').onclick=()=>{try{notify(bridge?.test(JSON.stringify(current()))||'Verificação local indisponível.')}catch(e){notify('Não foi possível testar o fluxo.')}};
+try{let saved=JSON.parse(bridge?.load()||'{}');if(Array.isArray(saved.flows))flows=saved.flows.filter(f=>f&&Array.isArray(f.nodes)&&Array.isArray(f.edges))}catch(e){}
+if(!flows.length)flows=[fresh()];
+show();notify('Complete o fluxo de criação ou edite os nós manualmente.');
+$('pending').onclick=()=>notify(bridge?.continuePending()||'Dispositivo indisponível.');
+})();
+</script></body></html>
